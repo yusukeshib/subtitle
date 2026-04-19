@@ -1,13 +1,14 @@
 import type { ExtensionMessage, SubtitleDetected, TabReset } from "./types";
 
 const SUBTITLE_URL_RE = /\.(vtt|dfxp|ttml2?)(\?|$)/i;
-const SUBTITLE_PATH_HINT = /(caption|subtitle|timedtext|subtitleset)/i;
+const SUBTITLE_PATH_HINT = /(caption|subtitle|timedtext|subtitleset|-subs?-|_subs?_|\/subs\/)/i;
+const HINTED_CONTAINER_RE = /\.(xml|json|m3u8)(\?|$)/i;
 
 const urlsByTab = new Map<number, Set<string>>();
 
 function looksLikeSubtitle(url: string): boolean {
   if (SUBTITLE_URL_RE.test(url)) return true;
-  if (SUBTITLE_PATH_HINT.test(url) && /\.(xml|json)(\?|$)/i.test(url)) return true;
+  if (SUBTITLE_PATH_HINT.test(url) && HINTED_CONTAINER_RE.test(url)) return true;
   return false;
 }
 

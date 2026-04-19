@@ -1,6 +1,6 @@
 import { getApiKey, getCache, setCache } from "./lib/cache";
+import { loadCues } from "./lib/subtitle";
 import { AbortError, MODEL, translateCues } from "./lib/translate";
-import { parseVtt } from "./lib/vtt";
 import type { ContentReady, ExtensionMessage, TranslatedCue } from "./types";
 
 const OVERLAY_HOST_ID = "prime-ja-subs-host";
@@ -239,10 +239,10 @@ async function onButtonClick() {
   const targetUrl = state.subtitleUrl;
 
   try {
-    const vtt = await fetchSubtitleText(targetUrl, signal);
-    const cues = parseVtt(vtt);
+    const text = await fetchSubtitleText(targetUrl, signal);
+    const cues = await loadCues(targetUrl, text, fetchSubtitleText, signal);
     if (cues.length === 0) {
-      throw new Error("字幕をパースできませんでした（WebVTT形式のみ対応）");
+      throw new Error("字幕のパース結果が空でした");
     }
 
     state.progress = { done: 0, total: cues.length };
