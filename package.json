@@ -1,7 +1,7 @@
 {
   "name": "prime-ja-subs",
   "version": "0.1.0",
-  "description": "Amazon Prime Video の英語字幕を Claude で日本語に翻訳してオーバーレイ表示する Chrome 拡張",
+  "description": "Chrome extension that translates Amazon Prime Video's English subtitles into Japanese using Claude and overlays them on the player",
   "private": true,
   "type": "module",
   "scripts": {
