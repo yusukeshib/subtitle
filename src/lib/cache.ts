@@ -1,6 +1,9 @@
 import type { CacheEntry } from "../types";
 
-const PREFIX = "sub:";
+// Bump this when the cue-schema or translation behaviour changes so stale
+// cached entries are ignored rather than mixed with the new format.
+const CACHE_SCHEMA = 2;
+const PREFIX = `sub/v${CACHE_SCHEMA}:`;
 
 async function sha256(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);

@@ -10,20 +10,25 @@ const MAX_ATTEMPTS = 4;
 
 const SYSTEM_PROMPT = `You are a film subtitle translator. Translate the source subtitles into natural, concise ${TARGET_LANGUAGE} subtitles.
 
-Rules:
+About the input:
+- Each <line> carries start/end seconds from the source subtitle track. The player uses whatever start/end you put on each output cue to decide when to show it, so your output timestamps are the ground truth downstream.
+
+How to translate:
 - Keep each line short enough to read quickly; insert a line break if it would otherwise be too long on screen.
 - Render proper nouns in the target language's native script; follow established translations when they exist.
 - Match the tone to the work's mood and each character's voice.
 - Use the target language's native punctuation conventions.
-- Consider each cue's start/end and the gap to adjacent cues when choosing pacing and tone:
+
+Cue restructuring is encouraged:
+- You decide the output cue structure. You may split one long source cue into several shorter cues, or merge tightly-spaced source cues into one — whatever reads most naturally. Professional native-language subtitle tracks routinely reflow the source cue boundaries for readability, and your output should too when it helps.
+- Each output cue's start/end must fall within the overall time range of the source cues in this batch, cues must be in chronological order, and they should not overlap.
+- Use cue spacing as tonal signal:
   - Short gap (< 1s) = rapid dialogue; crisp, clipped phrasing.
   - Long gap (> 5s) = monologue / narration; calmer phrasing.
-- One input cue maps to exactly one output line. Do not merge or split cues.
 
 I/O format:
-- Input: a sequence of <line i="N" start="SEC" end="SEC">source</line>.
-- Output: a sequence of <line i="N">${TARGET_LANGUAGE}</line> (do NOT echo start/end).
-- The index N must match the input exactly.
+- Input: a sequence of <line i="N" start="SEC" end="SEC">source</line>. The index N is only so you can refer back — do not echo it in the output.
+- Output: a sequence of <line start="SEC" end="SEC">${TARGET_LANGUAGE}</line>. Use seconds with up to 3 decimal places.
 - Output only <line> tags — no preamble, no code fences, no commentary.`;
 
 type Progress = (done: number, total: number) => void;
@@ -78,14 +83,55 @@ function serializeInput(
     .join("\n");
 }
 
-function parseOutput(raw: string): Array<{ i: number; ja: string }> {
-  const re = /<line\s+i="(\d+)"\s*>([\s\S]*?)<\/line>/g;
-  const out: Array<{ i: number; ja: string }> = [];
+type ParsedLine = { start: number; end: number; ja: string };
+
+function parseTimeValue(s: string): number {
+  const v = Number(s);
+  if (Number.isFinite(v)) return v;
+  // Accept clock-time style HH:MM:SS(.fff) in case the model ignores our "seconds" instruction.
+  const m = s.match(/^(\d+):(\d+):(\d+(?:\.\d+)?)$/);
+  if (m) return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  return Number.NaN;
+}
+
+function parseOutput(raw: string): ParsedLine[] {
+  // Match <line ...>text</line>, attribute order agnostic.
+  const re = /<line\s+([^>]*?)>([\s\S]*?)<\/line>/g;
+  const attrRe = /(\w+)\s*=\s*"([^"]*)"/g;
+  const out: ParsedLine[] = [];
   for (const m of raw.matchAll(re)) {
-    out.push({ i: Number(m[1]), ja: unescapeXml(m[2]).trim() });
+    const attrs: Record<string, string> = {};
+    for (const a of m[1].matchAll(attrRe)) attrs[a[1]] = a[2];
+    const start = parseTimeValue(attrs.start ?? "");
+    const end = parseTimeValue(attrs.end ?? "");
+    if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+    const ja = unescapeXml(m[2]).trim();
+    if (!ja) continue;
+    out.push({ start, end, ja });
   }
-  if (out.length === 0) throw new Error("No <line> tags found in model response");
+  if (out.length === 0) throw new Error("No <line> tags with start/end found in model response");
   return out;
+}
+
+function sanitizeChunkOutput(
+  parsed: ParsedLine[],
+  chunkStart: number,
+  chunkEnd: number,
+): TranslatedCue[] {
+  const clamped: TranslatedCue[] = [];
+  for (const p of parsed) {
+    const start = Math.max(chunkStart, Math.min(chunkEnd, p.start));
+    const end = Math.max(start + 0.001, Math.min(chunkEnd, p.end));
+    clamped.push({ start, end, ja: p.ja });
+  }
+  clamped.sort((a, b) => a.start - b.start);
+  // Collapse any residual overlap so downstream binary-search returns a single cue per time.
+  for (let i = 1; i < clamped.length; i++) {
+    if (clamped[i].start < clamped[i - 1].end) {
+      clamped[i - 1].end = clamped[i].start;
+    }
+  }
+  return clamped.filter((c) => c.end > c.start);
 }
 
 async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -192,37 +238,40 @@ export async function translateCues(
   const { signal, onProgress } = opts;
   const indexed = cues.map((c, i) => ({ i, start: c.start, end: c.end, t: c.text }));
   const chunks = chunk(indexed, CHUNK_SIZE);
-  const result: TranslatedCue[] = new Array(cues.length);
+  const result: TranslatedCue[] = [];
   let done = 0;
   let prevContext: string | null = null;
 
   for (const c of chunks) {
     if (signal?.aborted) throw new AbortError();
+    const chunkStart = c[0].start;
+    const chunkEnd = c[c.length - 1].end;
     const userContent = serializeInput(c);
-    const raw = await callClaudeWithRetry(apiKey, userContent, prevContext, signal);
-    const parsed = parseOutput(raw);
 
-    for (const item of parsed) {
-      const original = cues[item.i];
-      if (!original) continue;
-      result[item.i] = { start: original.start, end: original.end, ja: item.ja };
+    try {
+      const raw = await callClaudeWithRetry(apiKey, userContent, prevContext, signal);
+      const parsed = parseOutput(raw);
+      const sanitized = sanitizeChunkOutput(parsed, chunkStart, chunkEnd);
+      if (sanitized.length === 0) throw new Error("chunk produced no valid cues");
+      result.push(...sanitized);
+      prevContext = sanitized
+        .slice(-5)
+        .map((p) => p.ja)
+        .join("\n");
+    } catch (e) {
+      if (e instanceof AbortError || (e as Error).name === "AbortError") throw e;
+      // Preserve source cues unchanged so the track stays watchable even if a
+      // single chunk fails after retries.
+      for (const src of c) {
+        result.push({ start: src.start, end: src.end, ja: src.t });
+      }
     }
-
-    prevContext = parsed
-      .slice(-5)
-      .map((p) => p.ja)
-      .join("\n");
 
     done += c.length;
     onProgress?.(done, cues.length);
   }
 
-  for (let i = 0; i < cues.length; i++) {
-    if (!result[i]) {
-      result[i] = { start: cues[i].start, end: cues[i].end, ja: cues[i].text };
-    }
-  }
-  return result;
+  return result.sort((a, b) => a.start - b.start);
 }
 
 export { AbortError };
