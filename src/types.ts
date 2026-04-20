@@ -27,6 +27,8 @@ export type StateSnapshot = {
   progress: { done: number; total: number } | null;
   error: string | null;
   hasSubtitle: boolean;
+  enabled: boolean;
+  title: string | null;
 };
 
 export type ContentReady = {

@@ -53,6 +53,7 @@ const LANGUAGES = [
 const sub = document.getElementById("sub") as HTMLParagraphElement;
 const dot = document.getElementById("dot") as HTMLSpanElement;
 const statusText = document.getElementById("statusText") as HTMLSpanElement;
+const titleText = document.getElementById("titleText") as HTMLParagraphElement;
 const bar = document.getElementById("bar") as HTMLDivElement;
 const barFill = document.getElementById("barFill") as HTMLDivElement;
 const err = document.getElementById("err") as HTMLParagraphElement;
@@ -151,6 +152,12 @@ function render(s: StateSnapshot) {
   dot.className = `dot ${s.status}`;
   bar.classList.add("hidden");
   err.style.display = "none";
+  if (s.title) {
+    titleText.textContent = s.title;
+    titleText.style.display = "";
+  } else {
+    titleText.style.display = "none";
+  }
 
   const label: Record<Status, string> = {
     idle: "Waiting for a subtitle track…",

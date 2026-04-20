@@ -90,6 +90,7 @@ const STATUS_COLORS: Record<StateSnapshot["status"], string> = {
   ready: "#1a9b3f",
   error: "#b91c1c",
 };
+const DISABLED_COLOR = "#4b5563";
 
 function drawIcon(size: number, color: string): ImageData {
   const canvas = new OffscreenCanvas(size, size);
@@ -101,10 +102,10 @@ function drawIcon(size: number, color: string): ImageData {
   ctx.roundRect(0, 0, size, size, r);
   ctx.fill();
   ctx.fillStyle = "#fff";
-  ctx.font = `bold ${Math.round(size * 0.7)}px "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif`;
+  ctx.font = `900 ${Math.round(size * 0.55)}px system-ui, -apple-system, "Helvetica Neue", sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("字", size / 2, size / 2 + Math.round(size * 0.04));
+  ctx.fillText("CC", size / 2, size / 2 + Math.round(size * 0.04));
   return ctx.getImageData(0, 0, size, size);
 }
 
@@ -118,9 +119,8 @@ function iconSet(color: string) {
 }
 
 async function applyIcon(tabId: number, s: StateSnapshot) {
-  await chrome.action
-    .setIcon({ tabId, imageData: iconSet(STATUS_COLORS[s.status]) })
-    .catch(() => {});
+  const color = s.enabled ? STATUS_COLORS[s.status] : DISABLED_COLOR;
+  await chrome.action.setIcon({ tabId, imageData: iconSet(color) }).catch(() => {});
 }
 
 chrome.runtime.onInstalled.addListener(() => {

@@ -83,12 +83,34 @@ const state: State = {
   enabled: true,
 };
 
+function findTitle(): string | null {
+  // Prefer explicit player-chrome titles; fall back to the document heading
+  // and then to <title>, stripping Amazon's wrapper text.
+  const sels = [
+    ".atvwebplayersdk-title-text",
+    '[class*="TitleContainer"] [class*="title"]',
+    "h1",
+  ];
+  for (const sel of sels) {
+    const el = document.querySelector(sel) as HTMLElement | null;
+    const t = el?.textContent?.trim();
+    if (t) return t;
+  }
+  const t = document.title
+    ?.replace(/\s*\|\s*Prime Video\s*$/i, "")
+    .replace(/^Watch\s+/i, "")
+    .trim();
+  return t || null;
+}
+
 function snapshot(): StateSnapshot {
   return {
     status: state.status,
     progress: state.progress,
     error: state.error,
     hasSubtitle: state.subtitleUrl !== null,
+    enabled: state.enabled,
+    title: findTitle(),
   };
 }
 
@@ -157,12 +179,19 @@ function setOverlayText(text: string) {
   if (line.textContent !== text) line.textContent = text;
 }
 
+function nativeCaptionEl(): HTMLElement | null {
+  for (const sel of CAPTION_TEXT_SELECTORS) {
+    const el = document.querySelector(sel) as HTMLElement | null;
+    if (el) return el;
+  }
+  return null;
+}
+
 let lastCaptionRect: { top: number; height: number } | null = null;
 
 function findCaptionTextRect(): { top: number; height: number } | null {
-  for (const sel of CAPTION_TEXT_SELECTORS) {
-    const el = document.querySelector(sel) as HTMLElement | null;
-    if (!el) continue;
+  const el = nativeCaptionEl();
+  if (el) {
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) {
       lastCaptionRect = { top: r.top, height: r.height };
@@ -173,12 +202,10 @@ function findCaptionTextRect(): { top: number; height: number } | null {
 }
 
 function computeFontSizePx(): number | null {
-  // Prefer Prime Video's own caption size when the selector resolves — it
-  // already accounts for the user's caption-size preference, window size,
-  // fullscreen, etc.
-  for (const sel of CAPTION_TEXT_SELECTORS) {
-    const el = document.querySelector(sel) as HTMLElement | null;
-    if (!el) continue;
+  // Prefer Prime Video's own caption size when available — it already
+  // accounts for the user's caption-size preference, window size, fullscreen.
+  const el = nativeCaptionEl();
+  if (el) {
     const px = parseFloat(getComputedStyle(el).fontSize);
     if (Number.isFinite(px) && px > 0) return px;
   }
@@ -346,9 +373,7 @@ function attachCalibration(video: HTMLVideoElement) {
   let lastSeenText = "";
   const tryCalibrate = () => {
     if (!state.sourceByNormText) return;
-    const el = document.querySelector(
-      ".atvwebplayersdk-captions-text",
-    ) as HTMLElement | null;
+    const el = nativeCaptionEl();
     const raw = el?.textContent ?? "";
     if (raw === lastSeenText) return;
     lastSeenText = raw;
@@ -540,20 +565,14 @@ async function fetchSubtitleText(url: string, signal?: AbortSignal): Promise<str
 }
 
 function resetState() {
-  state.abortCtrl?.abort();
-  state.cleanupVideo?.();
-  state.cleanupCalibration?.();
+  clearPerUrlState();
   state.subtitleUrl = null;
-  state.cues = null;
-  state.sortedStarts = null;
-  state.sourceCues = null;
-  state.sourceByNormText = null;
-  state.timeOffset = 0;
   state.status = "idle";
-  state.progress = null;
-  state.error = null;
-  state.abortCtrl = null;
-  setOverlayText("");
+  subtitleCandidates.clear();
+  if (resolveInterval !== null) {
+    window.clearInterval(resolveInterval);
+    resolveInterval = null;
+  }
   broadcastState();
 }
 
@@ -571,45 +590,67 @@ async function hydrateSourceCues(url: string, cached: { sourceCues?: Cue[] }) {
   }
 }
 
-async function handleSubtitleDetected(url: string) {
-  if (state.subtitleUrl === url) return;
-  state.subtitleUrl = url;
+// Prime Video fetches several subtitle tracks in parallel at session start
+// (primary + other languages). We can't tell which is active from the URL
+// alone — they're opaque UUIDs — so we prefetch each candidate's cues and
+// match against whatever text is currently in the native caption DOM. The
+// track whose source cues contain the on-screen caption is the active one.
+type Candidate = { url: string; cues: Cue[] | null };
+const subtitleCandidates = new Map<string, Candidate>();
 
-  const cached = await getCache(url, state.targetLanguage);
-  if (cached) {
-    setCues(cached.cues);
-    state.timeOffset = 0;
-    await hydrateSourceCues(url, cached);
-    const video = findVideo();
-    if (video) attachVideoSync(video);
-
-    if (cached.complete === false && state.enabled) {
-      // Partial cache — auto-resume from where we left off.
-      void runTranslation(cached.cues.slice());
-      return;
+function handleSubtitleDetected(url: string) {
+  if (subtitleCandidates.has(url)) return;
+  const entry: Candidate = { url, cues: null };
+  subtitleCandidates.set(url, entry);
+  void (async () => {
+    try {
+      const text = await fetchSubtitleText(url);
+      entry.cues = await loadCues(url, text, fetchSubtitleText);
+    } catch {
+      entry.cues = [];
     }
-    state.status = "ready";
-    broadcastState();
+    void considerActiveTrack();
+  })();
+  void considerActiveTrack();
+}
+
+function pickCandidateByNative(): Candidate | null {
+  const raw = nativeCaptionEl()?.textContent?.trim();
+  if (!raw) return null;
+  const target = normalizeCueText(raw);
+  if (!target) return null;
+  for (const c of subtitleCandidates.values()) {
+    if (!c.cues) continue;
+    if (c.cues.some((x) => normalizeCueText(x.text) === target)) return c;
+  }
+  return null;
+}
+
+let resolveInterval: number | null = null;
+async function considerActiveTrack() {
+  const matched = pickCandidateByNative();
+  if (matched && matched.url !== state.subtitleUrl) {
+    if (resolveInterval !== null) {
+      window.clearInterval(resolveInterval);
+      resolveInterval = null;
+    }
+    await applySubtitleUrl(matched.url);
     return;
   }
-
-  // Fresh subtitle track. If enabled, auto-start; otherwise idle.
-  if (state.enabled) {
-    state.status = "detected";
-    broadcastState();
-    void runTranslation(null);
-  } else {
-    state.status = "detected";
-    broadcastState();
+  // No match yet — poll until native captions appear and a candidate matches.
+  if (!state.subtitleUrl && resolveInterval === null) {
+    resolveInterval = window.setInterval(() => {
+      void considerActiveTrack();
+    }, 500);
   }
 }
 
-async function onTargetLanguageChanged() {
+// Clear all per-URL translation state (everything except user settings).
+function clearPerUrlState() {
   state.abortCtrl?.abort();
   state.abortCtrl = null;
   state.cleanupVideo?.();
   state.cleanupCalibration?.();
-  setOverlayText("");
   state.cues = null;
   state.sortedStarts = null;
   state.sourceCues = null;
@@ -617,19 +658,30 @@ async function onTargetLanguageChanged() {
   state.timeOffset = 0;
   state.progress = null;
   state.error = null;
+  setOverlayText("");
+}
 
-  if (!state.subtitleUrl) {
-    state.status = "idle";
-    broadcastState();
-    return;
-  }
+// The main episode has a long duration; the background-looping trailer on
+// the detail page is short (~1–2 min). Translating before the user hits
+// Play wastes API calls on the wrong video, so gate on real playback.
+const MAIN_VIDEO_MIN_DURATION = 300;
+function isMainVideoPlaying(): boolean {
+  return Array.from(document.querySelectorAll("video")).some(
+    (v) => !v.paused && v.videoWidth > 0 && v.duration > MAIN_VIDEO_MIN_DURATION,
+  );
+}
+
+// Given state.subtitleUrl is set, hydrate from cache (if any) and start or
+// resume translation when appropriate.
+async function loadOrTranslate() {
+  if (!state.subtitleUrl) return;
   const cached = await getCache(state.subtitleUrl, state.targetLanguage);
   if (cached) {
     setCues(cached.cues);
     await hydrateSourceCues(state.subtitleUrl, cached);
     const video = findVideo();
     if (video) attachVideoSync(video);
-    if (cached.complete === false && state.enabled) {
+    if (cached.complete === false && state.enabled && isMainVideoPlaying()) {
       void runTranslation(cached.cues.slice());
       return;
     }
@@ -639,7 +691,26 @@ async function onTargetLanguageChanged() {
   }
   state.status = "detected";
   broadcastState();
-  if (state.enabled) void runTranslation(null);
+  if (state.enabled && isMainVideoPlaying()) void runTranslation(null);
+}
+
+async function applySubtitleUrl(url: string) {
+  if (state.subtitleUrl === url) return;
+  clearPerUrlState();
+  state.subtitleUrl = url;
+  await loadOrTranslate();
+}
+
+async function onTargetLanguageChanged() {
+  const url = state.subtitleUrl;
+  clearPerUrlState();
+  if (!url) {
+    state.status = "idle";
+    broadcastState();
+    return;
+  }
+  state.subtitleUrl = url; // clearPerUrlState left it alone, but keep explicit
+  await loadOrTranslate();
 }
 
 function onEnabledChanged(next: boolean) {
@@ -652,23 +723,26 @@ function onEnabledChanged(next: boolean) {
     setOverlayText("");
     if (state.status === "translating") {
       state.status = state.subtitleUrl ? "detected" : "idle";
-      broadcastState();
     }
+    broadcastState();
     return;
   }
+  broadcastState();
   if (!prev && state.subtitleUrl && state.status !== "translating") {
-    // Turned back on with a subtitle already detected — pick up where we left off.
-    void (async () => {
-      const cached = await getCache(state.subtitleUrl!, state.targetLanguage);
-      if (cached && cached.complete !== false) {
-        setCues(cached.cues);
-        state.status = "ready";
-        broadcastState();
-        return;
-      }
-      void runTranslation(cached?.cues.slice() ?? null);
-    })();
+    void loadOrTranslate();
   }
+}
+
+// Watch any <video> that's large enough to be the main episode and invoke
+// loadOrTranslate once it starts playing. This is the "user clicked Play"
+// trigger that gates translation from kicking off on the detail page.
+function watchForPlayback() {
+  const onPlay = (e: Event) => {
+    const v = e.target as HTMLVideoElement | null;
+    if (!v || v.duration <= MAIN_VIDEO_MIN_DURATION) return;
+    if (state.subtitleUrl && state.status !== "translating") void loadOrTranslate();
+  };
+  document.addEventListener("play", onPlay, true);
 }
 
 function watchForVideo() {
@@ -744,6 +818,13 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 watchForVideo();
+watchForPlayback();
 
 window.addEventListener("resize", updateOverlayPosition);
 document.addEventListener("fullscreenchange", updateOverlayPosition);
+// When the page is going away (tab close, navigation), abort any in-flight
+// translation so the fetch is cancelled and the partial cache write we did
+// during streaming is what the next visit picks up.
+window.addEventListener("pagehide", () => {
+  state.abortCtrl?.abort();
+});

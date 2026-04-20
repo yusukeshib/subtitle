@@ -216,20 +216,15 @@ async function callClaudeStreaming(
   apiKey: string,
   userContent: string,
   systemPrompt: string,
-  prefill: string | null,
   onLineDone: (parsed: ParsedLine | null) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-    { role: "user", content: userContent },
-  ];
-  if (prefill) messages.push({ role: "assistant", content: prefill });
   const body = {
     model: MODEL,
     max_tokens: MAX_TOKENS,
     stream: true,
     system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-    messages,
+    messages: [{ role: "user", content: userContent }],
   };
   const res = await fetch(API_URL, {
     method: "POST",
@@ -310,7 +305,6 @@ async function callClaudeWithRetry(
   apiKey: string,
   userContent: string,
   systemPrompt: string,
-  prefill: string | null,
   onLineDone: (parsed: ParsedLine | null) => void,
   signal?: AbortSignal,
 ): Promise<string> {
@@ -318,7 +312,7 @@ async function callClaudeWithRetry(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (signal?.aborted) throw new AbortError();
     try {
-      return await callClaudeStreaming(apiKey, userContent, systemPrompt, prefill, onLineDone, signal);
+      return await callClaudeStreaming(apiKey, userContent, systemPrompt, onLineDone, signal);
     } catch (e) {
       lastErr = e;
       if (!isRetryable(e) || attempt === MAX_ATTEMPTS - 1) throw e;
@@ -337,24 +331,35 @@ export async function translateCues(
   const { signal, onProgress, onCue, resumeFrom, targetLanguage } = opts;
   const systemPrompt = buildSystemPrompt(targetLanguage);
   const indexed = cues.map((c, i) => ({ i, start: c.start, end: c.end, t: c.text }));
-  const userContent = serializeInput(indexed);
   const total = cues.length;
   const rangeStart = indexed[0].start;
   const rangeEnd = indexed[indexed.length - 1].end;
 
-  // Serialize any prior cues as an assistant-message prefill so the model
-  // resumes generation after the last cue. Uses the same <line> shape it
-  // emits itself; ends with a newline so the next token naturally starts a
-  // new <line>.
-  const prefill =
-    resumeFrom && resumeFrom.length > 0
-      ? `${resumeFrom
-          .map(
-            (c) =>
-              `<line start="${c.start.toFixed(2)}" end="${c.end.toFixed(2)}">${escapeXml(c.text)}</line>`,
-          )
-          .join("\n")}\n`
-      : null;
+  // Build the user message. For resume, only ship remaining source cues and
+  // include prior translations as inline context. Sonnet doesn't support
+  // assistant-message prefill, so we can't do the cleaner continuation form.
+  let userContent: string;
+  if (resumeFrom && resumeFrom.length > 0) {
+    const lastPriorStart = resumeFrom[resumeFrom.length - 1].start;
+    const remaining = indexed.filter((c) => c.start > lastPriorStart);
+    if (remaining.length === 0) {
+      // Every source cue is already translated; nothing to do.
+      onProgress?.(total, total);
+      return [...resumeFrom];
+    }
+    const priorXml = resumeFrom
+      .map(
+        (c) =>
+          `<line start="${c.start.toFixed(2)}" end="${c.end.toFixed(2)}">${escapeXml(c.text.trim())}</line>`,
+      )
+      .join("\n");
+    userContent =
+      `Resuming a partial translation. Maintain the same style, naming, and voice as the already-translated section below. Output <line> tags ONLY for the remaining source cues — do not re-emit any of the already-translated lines.\n\n` +
+      `<already_translated>\n${priorXml}\n</already_translated>\n\n` +
+      `${serializeInput(remaining)}`;
+  } else {
+    userContent = serializeInput(indexed);
+  }
 
   let done = resumeFrom?.length ?? 0;
   onProgress?.(done, total);
@@ -393,7 +398,6 @@ export async function translateCues(
     apiKey,
     userContent,
     systemPrompt,
-    prefill,
     (parsed) => {
       // Streaming onLineDone may exceed total briefly if the model emits
       // extra lines; clamp so the UI doesn't jump past 100%.
