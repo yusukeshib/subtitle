@@ -23,13 +23,22 @@ import type {
 const OVERLAY_HOST_ID = "jimaku-host";
 const HIDE_ORIGINAL_STYLE_ID = "jimaku-hide-original";
 
-// Selectors targeting Prime Video's native caption overlay. Class names may
-// shift after player updates; kept broad on purpose.
+// Selectors for positioning (prefer the text span — the overlay container
+// covers the whole player, which is useless as a position anchor).
+const CAPTION_TEXT_SELECTORS = [
+  ".atvwebplayersdk-captions-text",
+  '.webPlayerSDKContainer [class*="caption"][class*="text"]',
+];
+
+// Broader selectors used only to hide Prime Video's native captions.
+const CAPTION_HIDE_SELECTORS = [
+  ".atvwebplayersdk-captions-overlay",
+  ".atvwebplayersdk-captions-text",
+  '.webPlayerSDKContainer [class*="captions"]',
+];
+
 const HIDE_ORIGINAL_CSS = `
-  .atvwebplayersdk-captions-overlay,
-  .atvwebplayersdk-captions-text,
-  .webPlayerSDKContainer [class*="captions"],
-  .f1ts6ae1, .f1ts6ae2, .f1ts6ae3 {
+  ${CAPTION_HIDE_SELECTORS.join(",\n  ")} {
     visibility: hidden !important;
   }
 `;
@@ -111,8 +120,8 @@ function ensureOverlayHost(): ShadowRoot {
     .line {
       position: fixed;
       left: 50%;
-      top: 8%;
-      transform: translateX(-50%);
+      top: 88%;
+      transform: translate(-50%, -100%);
       max-width: 80%;
       padding: 6px 12px;
       font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
@@ -144,6 +153,51 @@ function setOverlayText(text: string) {
   if (line.textContent !== text) line.textContent = text;
 }
 
+let lastCaptionRect: { top: number; height: number } | null = null;
+
+function findCaptionTextRect(): { top: number; height: number } | null {
+  for (const sel of CAPTION_TEXT_SELECTORS) {
+    const el = document.querySelector(sel) as HTMLElement | null;
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) {
+      lastCaptionRect = { top: r.top, height: r.height };
+      return lastCaptionRect;
+    }
+  }
+  return lastCaptionRect;
+}
+
+function updateOverlayPosition() {
+  const root = ensureOverlayHost();
+  const line = root.querySelector(".line") as HTMLDivElement;
+  const rect = findCaptionTextRect();
+  if (rect) {
+    if (state.hideOriginal) {
+      // Native captions are hidden via visibility: hidden so their layout box
+      // still exists — place ours exactly where the text span sits.
+      const centerY = rect.top + rect.height / 2;
+      line.style.top = `${centerY}px`;
+      line.style.transform = "translate(-50%, -50%)";
+    } else {
+      // Stack above the native caption text with a 4px gap.
+      line.style.top = `${rect.top - 4}px`;
+      line.style.transform = "translate(-50%, -100%)";
+    }
+    return;
+  }
+  const video = state.video ?? findVideo();
+  if (video) {
+    const r = video.getBoundingClientRect();
+    // Fallback: ~12% from the bottom of the video, matching typical caption placement.
+    line.style.top = `${r.bottom - r.height * 0.12}px`;
+    line.style.transform = "translate(-50%, -50%)";
+    return;
+  }
+  line.style.top = "";
+  line.style.transform = "";
+}
+
 function repaintOverlay() {
   if (!state.showTranslated) {
     setOverlayText("");
@@ -153,19 +207,22 @@ function repaintOverlay() {
   if (!v) return;
   const cue = findCueAt(v.currentTime - state.offsetSeconds);
   setOverlayText(cue ? cue.text : "");
+  updateOverlayPosition();
 }
 
 function applyHideOriginal() {
   const existing = document.getElementById(HIDE_ORIGINAL_STYLE_ID);
   if (state.hideOriginal) {
-    if (existing) return;
-    const style = document.createElement("style");
-    style.id = HIDE_ORIGINAL_STYLE_ID;
-    style.textContent = HIDE_ORIGINAL_CSS;
-    (document.head ?? document.documentElement).appendChild(style);
+    if (!existing) {
+      const style = document.createElement("style");
+      style.id = HIDE_ORIGINAL_STYLE_ID;
+      style.textContent = HIDE_ORIGINAL_CSS;
+      (document.head ?? document.documentElement).appendChild(style);
+    }
   } else {
     existing?.remove();
   }
+  updateOverlayPosition();
 }
 
 function findCueAt(seconds: number): TranslatedCue | null {
@@ -207,6 +264,7 @@ function attachVideoSync(video: HTMLVideoElement) {
     }
     const cue = findCueAt(video.currentTime - state.offsetSeconds);
     setOverlayText(cue ? cue.text : "");
+    updateOverlayPosition();
   };
   video.addEventListener("timeupdate", onUpdate);
   state.cleanupVideo = () => {
@@ -452,3 +510,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 watchForVideo();
+
+window.addEventListener("resize", updateOverlayPosition);
+document.addEventListener("fullscreenchange", updateOverlayPosition);
