@@ -16,6 +16,15 @@ export type CacheEntry = {
   cues: TranslatedCue[];
 };
 
+export type Status = "idle" | "detected" | "translating" | "ready" | "error";
+
+export type StateSnapshot = {
+  status: Status;
+  progress: { done: number; total: number } | null;
+  error: string | null;
+  hasSubtitle: boolean;
+};
+
 export type ContentReady = {
   type: "CONTENT_READY";
 };
@@ -29,4 +38,23 @@ export type TabReset = {
   type: "TAB_RESET";
 };
 
-export type ExtensionMessage = ContentReady | SubtitleDetected | TabReset;
+export type PopupGetState = {
+  type: "POPUP_GET_STATE";
+};
+
+export type PopupStart = {
+  type: "POPUP_START";
+};
+
+export type StateUpdate = {
+  type: "STATE_UPDATE";
+  state: StateSnapshot;
+};
+
+export type ExtensionMessage =
+  | ContentReady
+  | SubtitleDetected
+  | TabReset
+  | PopupGetState
+  | PopupStart
+  | StateUpdate;

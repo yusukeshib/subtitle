@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jimaku</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+        width: 300px;
+        color: #1a1a1a;
+        background: #fafafa;
+      }
+      .wrap { padding: 14px 16px 16px; }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 2px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .sub { font-size: 11px; color: #666; margin: 0 0 12px; }
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        margin-bottom: 10px;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #aaa;
+        flex: 0 0 auto;
+      }
+      .dot.idle      { background: #aaa; }
+      .dot.detected  { background: #d48a00; }
+      .dot.translating { background: #1f6feb; }
+      .dot.ready     { background: #1a9b3f; }
+      .dot.error     { background: #b91c1c; }
+      .bar {
+        height: 6px;
+        background: #e4e4e4;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 10px;
+      }
+      .bar > div {
+        height: 100%;
+        background: #1f6feb;
+        width: 0%;
+        transition: width 0.2s ease;
+      }
+      .bar.hidden { display: none; }
+      button {
+        width: 100%;
+        padding: 9px 12px;
+        font-size: 13px;
+        background: #1a1a1a;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      button:hover:not([disabled]) { background: #333; }
+      button[disabled] { opacity: 0.6; cursor: default; }
+      button.hidden { display: none; }
+      .err {
+        font-size: 12px;
+        color: #b91c1c;
+        margin: 8px 0 0;
+        word-break: break-word;
+      }
+      .meta {
+        font-size: 11px;
+        color: #888;
+        margin-top: 10px;
+        line-height: 1.5;
+      }
+      .meta a { color: #0366d6; text-decoration: none; }
+      .meta a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Jimaku</h1>
+      <p class="sub" id="sub">—</p>
+
+      <div class="status-row">
+        <span class="dot idle" id="dot"></span>
+        <span id="statusText">Checking…</span>
+      </div>
+
+      <div class="bar hidden" id="bar"><div id="barFill"></div></div>
+
+      <button id="action" class="hidden" type="button">Generate</button>
+
+      <p class="err" id="err" style="display:none;"></p>
+
+      <p class="meta">
+        <span id="modelLabel"></span>
+        · <a href="#" id="openOptions">Settings</a>
+      </p>
+    </div>
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

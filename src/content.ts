@@ -1,12 +1,16 @@
 import { getApiKey, getCache, getOffsetSeconds, setCache } from "./lib/cache";
 import { loadCues } from "./lib/subtitle";
-import { AbortError, MODEL, TARGET_LANGUAGE, translateCues } from "./lib/translate";
-import type { ContentReady, ExtensionMessage, TranslatedCue } from "./types";
+import { AbortError, MODEL, translateCues } from "./lib/translate";
+import type {
+  ContentReady,
+  ExtensionMessage,
+  StateSnapshot,
+  StateUpdate,
+  Status,
+  TranslatedCue,
+} from "./types";
 
 const OVERLAY_HOST_ID = "jimaku-host";
-const BUTTON_HOST_ID = "jimaku-button-host";
-
-type Status = "idle" | "detected" | "translating" | "ready" | "error";
 
 type State = {
   subtitleUrl: string | null;
@@ -33,6 +37,20 @@ const state: State = {
   cleanupVideo: null,
   offsetSeconds: 0,
 };
+
+function snapshot(): StateSnapshot {
+  return {
+    status: state.status,
+    progress: state.progress,
+    error: state.error,
+    hasSubtitle: state.subtitleUrl !== null,
+  };
+}
+
+function broadcastState() {
+  const msg: StateUpdate = { type: "STATE_UPDATE", state: snapshot() };
+  chrome.runtime.sendMessage(msg).catch(() => {});
+}
 
 function findVideo(): HTMLVideoElement | null {
   const videos = Array.from(document.querySelectorAll("video")).filter(
@@ -98,86 +116,6 @@ function setOverlayText(text: string) {
   if (line.textContent !== text) line.textContent = text;
 }
 
-function ensureButtonHost(): ShadowRoot {
-  const existing = document.getElementById(BUTTON_HOST_ID);
-  if (existing?.shadowRoot) return existing.shadowRoot;
-
-  const host = document.createElement("div");
-  host.id = BUTTON_HOST_ID;
-  Object.assign(host.style, {
-    position: "fixed",
-    right: "16px",
-    top: "64px",
-    zIndex: "2147483647",
-  });
-  document.documentElement.appendChild(host);
-  const root = host.attachShadow({ mode: "open" });
-  const style = document.createElement("style");
-  style.textContent = `
-    .btn {
-      font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
-      background: rgba(20,20,20,0.85);
-      color: #fff;
-      border: 1px solid rgba(255,255,255,0.3);
-      border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 13px;
-      cursor: pointer;
-      backdrop-filter: blur(6px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    }
-    .btn:hover { background: rgba(40,40,40,0.95); }
-    .btn[disabled] { cursor: default; opacity: 0.85; }
-    .note { font-size: 11px; opacity: 0.7; display: block; margin-top: 2px; }
-    .hidden { display: none; }
-  `;
-  root.appendChild(style);
-  const btn = document.createElement("button");
-  btn.className = "btn";
-  btn.addEventListener("click", onButtonClick);
-  root.appendChild(btn);
-  return root;
-}
-
-function renderButton() {
-  const root = ensureButtonHost();
-  const btn = root.querySelector(".btn") as HTMLButtonElement;
-  switch (state.status) {
-    case "idle":
-      btn.classList.add("hidden");
-      break;
-    case "detected":
-      btn.classList.remove("hidden");
-      btn.disabled = false;
-      btn.innerHTML = `Generate ${TARGET_LANGUAGE} subtitles<span class="note">${MODEL} · billed on first run</span>`;
-      break;
-    case "translating": {
-      btn.classList.remove("hidden");
-      btn.disabled = true;
-      const p = state.progress;
-      const pct = p ? Math.round((p.done / Math.max(1, p.total)) * 100) : 0;
-      btn.innerHTML = `Translating… ${p?.done ?? 0}/${p?.total ?? "?"} (${pct}%)`;
-      break;
-    }
-    case "ready":
-      btn.classList.add("hidden");
-      break;
-    case "error":
-      btn.classList.remove("hidden");
-      btn.disabled = false;
-      btn.innerHTML = `⚠ Error (click to retry)<span class="note">${escapeHtml((state.error ?? "").slice(0, 80))}</span>`;
-      break;
-  }
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
 function findCueAt(seconds: number): TranslatedCue | null {
   const cues = state.cues;
   const starts = state.sortedStarts;
@@ -222,11 +160,11 @@ function attachVideoSync(video: HTMLVideoElement) {
   };
 }
 
-async function onButtonClick() {
+async function startTranslation() {
   if (state.status === "error") {
     state.error = null;
     state.status = state.subtitleUrl ? "detected" : "idle";
-    renderButton();
+    broadcastState();
     return;
   }
   if (state.status !== "detected" || !state.subtitleUrl) return;
@@ -235,7 +173,7 @@ async function onButtonClick() {
   if (!apiKey) {
     state.status = "error";
     state.error = "No API key set. Open the extension options to add one.";
-    renderButton();
+    broadcastState();
     return;
   }
 
@@ -243,7 +181,7 @@ async function onButtonClick() {
   state.progress = { done: 0, total: 0 };
   state.abortCtrl = new AbortController();
   const { signal } = state.abortCtrl;
-  renderButton();
+  broadcastState();
 
   const targetUrl = state.subtitleUrl;
 
@@ -255,14 +193,14 @@ async function onButtonClick() {
     }
 
     state.progress = { done: 0, total: cues.length };
-    renderButton();
+    broadcastState();
 
     const translated = await translateCues(cues, apiKey, {
       signal,
       onProgress: (done, total) => {
         if (state.subtitleUrl !== targetUrl) return;
         state.progress = { done, total };
-        renderButton();
+        broadcastState();
       },
     });
 
@@ -270,7 +208,7 @@ async function onButtonClick() {
 
     setCues(translated);
     state.status = "ready";
-    renderButton();
+    broadcastState();
 
     await setCache(targetUrl, {
       translatedAt: Date.now(),
@@ -285,7 +223,7 @@ async function onButtonClick() {
     if (state.subtitleUrl !== targetUrl) return;
     state.status = "error";
     state.error = e instanceof Error ? e.message : String(e);
-    renderButton();
+    broadcastState();
   } finally {
     state.abortCtrl = null;
   }
@@ -308,7 +246,7 @@ function resetState() {
   state.error = null;
   state.abortCtrl = null;
   setOverlayText("");
-  renderButton();
+  broadcastState();
 }
 
 async function handleSubtitleDetected(url: string) {
@@ -319,7 +257,7 @@ async function handleSubtitleDetected(url: string) {
   if (cached) {
     setCues(cached.cues);
     state.status = "ready";
-    renderButton();
+    broadcastState();
     const video = findVideo();
     if (video) attachVideoSync(video);
     return;
@@ -327,7 +265,7 @@ async function handleSubtitleDetected(url: string) {
 
   if (state.status !== "translating") {
     state.status = "detected";
-    renderButton();
+    broadcastState();
   }
 }
 
@@ -357,6 +295,12 @@ chrome.runtime.onMessage.addListener((raw: ExtensionMessage) => {
       break;
     case "TAB_RESET":
       resetState();
+      break;
+    case "POPUP_GET_STATE":
+      broadcastState();
+      break;
+    case "POPUP_START":
+      void startTranslation();
       break;
   }
 });

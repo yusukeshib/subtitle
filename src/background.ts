@@ -1,4 +1,4 @@
-import type { ExtensionMessage, SubtitleDetected, TabReset } from "./types";
+import type { ExtensionMessage, StateSnapshot, SubtitleDetected, TabReset } from "./types";
 
 const SUBTITLE_URL_RE = /\.(vtt|dfxp|ttml2?)(\?|$)/i;
 const SUBTITLE_PATH_HINT = /(caption|subtitle|timedtext|subtitleset|-subs?-|_subs?_|\/subs\/)/i;
@@ -63,16 +63,86 @@ chrome.webRequest.onBeforeRequest.addListener(
 );
 
 chrome.runtime.onMessage.addListener((raw: ExtensionMessage, sender) => {
-  if (raw.type !== "CONTENT_READY") return;
-  const tabId = sender.tab?.id;
-  if (tabId === undefined) return;
-  const seen = urlsByTab.get(tabId);
-  if (!seen) return;
-  for (const url of seen) {
-    const msg: SubtitleDetected = { type: "SUBTITLE_DETECTED", url };
-    chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+  if (raw.type === "CONTENT_READY") {
+    const tabId = sender.tab?.id;
+    if (tabId === undefined) return;
+    const seen = urlsByTab.get(tabId);
+    if (!seen) return;
+    for (const url of seen) {
+      const msg: SubtitleDetected = { type: "SUBTITLE_DETECTED", url };
+      chrome.tabs.sendMessage(tabId, msg).catch(() => {});
+    }
+    return;
+  }
+  if (raw.type === "STATE_UPDATE") {
+    const tabId = sender.tab?.id;
+    if (tabId === undefined) return;
+    applyBadge(tabId, raw.state);
+    void applyIcon(tabId, raw.state);
+    return;
   }
 });
+
+const STATUS_COLORS: Record<StateSnapshot["status"], string> = {
+  idle: "#9ca3af",
+  detected: "#d48a00",
+  translating: "#1f6feb",
+  ready: "#1a9b3f",
+  error: "#b91c1c",
+};
+
+function drawIcon(size: number, color: string): ImageData {
+  const canvas = new OffscreenCanvas(size, size);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
+  const r = Math.max(2, Math.round(size * 0.22));
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, r);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = `bold ${Math.round(size * 0.7)}px "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("字", size / 2, size / 2 + Math.round(size * 0.04));
+  return ctx.getImageData(0, 0, size, size);
+}
+
+function iconSet(color: string) {
+  return {
+    "16": drawIcon(16, color),
+    "32": drawIcon(32, color),
+    "48": drawIcon(48, color),
+    "128": drawIcon(128, color),
+  };
+}
+
+async function applyIcon(tabId: number, s: StateSnapshot) {
+  await chrome.action
+    .setIcon({ tabId, imageData: iconSet(STATUS_COLORS[s.status]) })
+    .catch(() => {});
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.action.setIcon({ imageData: iconSet(STATUS_COLORS.idle) }).catch(() => {});
+});
+
+function applyBadge(tabId: number, s: StateSnapshot) {
+  const action = chrome.action;
+  if (s.status === "translating") {
+    const p = s.progress;
+    const pct = p && p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+    action.setBadgeBackgroundColor({ tabId, color: STATUS_COLORS.translating });
+    action.setBadgeText({ tabId, text: String(pct) });
+    return;
+  }
+  if (s.status === "error") {
+    action.setBadgeBackgroundColor({ tabId, color: STATUS_COLORS.error });
+    action.setBadgeText({ tabId, text: "!" });
+    return;
+  }
+  action.setBadgeText({ tabId, text: "" });
+}
 
 // Clear tab state on full page load
 chrome.tabs.onRemoved.addListener((tabId) => {
