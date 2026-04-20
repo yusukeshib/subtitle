@@ -6,6 +6,7 @@ const API_VERSION = "2023-06-01";
 const CHUNK_SIZE = 50;
 const MAX_TOKENS = 8000;
 const MAX_ATTEMPTS = 4;
+const CONCURRENCY = 4;
 
 function buildSystemPrompt(lang: string): string {
   return `You are a film subtitle translator. Translate the source subtitles into natural ${lang} subtitles that read like a professionally authored native-${lang} track — not a literal gloss of the source.
@@ -173,19 +174,12 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 async function callClaudeOnce(
   apiKey: string,
   userContent: string,
-  prevContext: string | null,
   systemPrompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
-  const messages: Array<{ role: string; content: string }> = [];
-  if (prevContext) {
-    messages.push({
-      role: "user",
-      content: `Reference: translations from the previous chunk. Use them only for context and tonal consistency; do NOT retranslate them here.\n${prevContext}`,
-    });
-    messages.push({ role: "assistant", content: "Understood. Waiting for the next chunk." });
-  }
-  messages.push({ role: "user", content: userContent });
+  const messages: Array<{ role: string; content: string }> = [
+    { role: "user", content: userContent },
+  ];
 
   const body = {
     model: MODEL,
@@ -233,7 +227,6 @@ function isRetryable(err: unknown): boolean {
 async function callClaudeWithRetry(
   apiKey: string,
   userContent: string,
-  prevContext: string | null,
   systemPrompt: string,
   signal?: AbortSignal,
 ): Promise<string> {
@@ -241,7 +234,7 @@ async function callClaudeWithRetry(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (signal?.aborted) throw new AbortError();
     try {
-      return await callClaudeOnce(apiKey, userContent, prevContext, systemPrompt, signal);
+      return await callClaudeOnce(apiKey, userContent, systemPrompt, signal);
     } catch (e) {
       lastErr = e;
       if (!isRetryable(e) || attempt === MAX_ATTEMPTS - 1) throw e;
@@ -261,39 +254,47 @@ export async function translateCues(
   const systemPrompt = buildSystemPrompt(targetLanguage);
   const indexed = cues.map((c, i) => ({ i, start: c.start, end: c.end, t: c.text }));
   const chunks = chunk(indexed, CHUNK_SIZE);
-  const result: TranslatedCue[] = [];
+  const perChunk: TranslatedCue[][] = new Array(chunks.length);
   let done = 0;
-  let prevContext: string | null = null;
 
-  for (const c of chunks) {
-    if (signal?.aborted) throw new AbortError();
+  async function processChunk(index: number) {
+    const c = chunks[index];
     const chunkStart = c[0].start;
     const chunkEnd = c[c.length - 1].end;
     const userContent = serializeInput(c);
 
     try {
-      const raw = await callClaudeWithRetry(apiKey, userContent, prevContext, systemPrompt, signal);
+      const raw = await callClaudeWithRetry(apiKey, userContent, systemPrompt, signal);
       const parsed = parseOutput(raw);
       const sanitized = sanitizeChunkOutput(parsed, chunkStart, chunkEnd);
       if (sanitized.length === 0) throw new Error("chunk produced no valid cues");
-      result.push(...sanitized);
-      prevContext = sanitized
-        .slice(-5)
-        .map((p) => p.text)
-        .join("\n");
+      perChunk[index] = sanitized;
     } catch (e) {
       if (e instanceof AbortError || (e as Error).name === "AbortError") throw e;
       // Preserve source cues unchanged so the track stays watchable even if a
       // single chunk fails after retries.
-      for (const src of c) {
-        result.push({ start: src.start, end: src.end, text: src.t });
-      }
+      perChunk[index] = c.map((src) => ({ start: src.start, end: src.end, text: src.t }));
     }
-
     done += c.length;
     onProgress?.(done, cues.length);
   }
 
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(CONCURRENCY, chunks.length) },
+    async function worker() {
+      while (true) {
+        if (signal?.aborted) throw new AbortError();
+        const i = next++;
+        if (i >= chunks.length) return;
+        await processChunk(i);
+      }
+    },
+  );
+  await Promise.all(workers);
+
+  const result: TranslatedCue[] = [];
+  for (const list of perChunk) if (list) result.push(...list);
   return result.sort((a, b) => a.start - b.start);
 }
 
