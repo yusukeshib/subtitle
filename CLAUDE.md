@@ -20,19 +20,15 @@ Chrome extension (MV3) that translates Amazon Prime Video's English subtitles vi
 - `npm run chrome` — launches Chrome with `dist/` loaded + remote debugging on port 9222
 - `npm run chrome:build` — `build` then `chrome`
 
-## Dev workflow (HMR, no rebuild per change)
+## Dev workflow
 
-CRXJS supports hot-reload. Preferred iteration loop:
+Use `npm run chrome:build` for every iteration — CRXJS HMR via `npm run dev` exists but has been too flaky to rely on (stale dev manifests after manifest edits, service-worker reload races, CORS quirks). Production builds are fast (<200ms) so there's no real cost to the explicit rebuild.
 
-1. Run `npm run dev` in one terminal — writes a dev manifest to `dist/` and serves module HMR from `localhost:5173`
-2. Load `dist/` as an unpacked extension (once; `npm run chrome` does this with CDP on 9222)
-3. Edit `src/content.ts`, `src/popup/*`, or `src/options/*` → **auto-reloads** in the browser, no rebuild needed
-4. Edit `src/background.ts` → CRXJS attempts to reload the service worker; if it gets stuck, click Reload on `chrome://extensions` (it's not HMR-friendly)
-5. Before pushing, run `npm run build` to confirm a clean prod build (`dist/` is gitignored, so CI builds from source)
+1. Edit code
+2. `npm run chrome:build` (or `npm run build` + click Reload on `chrome://extensions` if Chrome is already running)
+3. Refresh the Prime Video tab
 
-`npm run build` vs `npm run dev` both write to `dist/`, so switching between them just requires reloading the extension once.
-
-**Vite CORS gotcha:** Vite 5+ tightened `server.cors` to reject `chrome-extension://` origins by default. `vite.config.ts` explicitly allows them via `server.cors.origin: /chrome-extension:\/\/.+/`. Without it, the extension sees `[CRXJS] Vite Dev Server is not available on http://localhost:5173` with CORS errors in the console.
+The popup shows the current git short SHA (plus `-dirty` if uncommitted) to confirm which build is loaded.
 
 ## Debugging via chrome-devtools MCP
 
