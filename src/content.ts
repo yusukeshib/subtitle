@@ -3,8 +3,8 @@ import { loadCues } from "./lib/subtitle";
 import { AbortError, MODEL, TARGET_LANGUAGE, translateCues } from "./lib/translate";
 import type { ContentReady, ExtensionMessage, TranslatedCue } from "./types";
 
-const OVERLAY_HOST_ID = "prime-ja-subs-host";
-const BUTTON_HOST_ID = "prime-ja-subs-button-host";
+const OVERLAY_HOST_ID = "jimaku-host";
+const BUTTON_HOST_ID = "jimaku-button-host";
 
 type Status = "idle" | "detected" | "translating" | "ready" | "error";
 

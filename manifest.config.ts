@@ -2,7 +2,7 @@ import { defineManifest } from "@crxjs/vite-plugin";
 
 export default defineManifest({
   manifest_version: 3,
-  name: "Prime JA Subs",
+  name: "Jimaku",
   version: "0.1.0",
   description: "Translate Amazon Prime Video subtitles with Claude and overlay them on the player",
   permissions: ["storage", "webRequest", "webNavigation", "scripting"],
@@ -34,6 +34,6 @@ export default defineManifest({
   ],
   options_page: "src/options/options.html",
   action: {
-    default_title: "Prime JA Subs",
+    default_title: "Jimaku",
   },
 });

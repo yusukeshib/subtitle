@@ -1,5 +1,5 @@
 {
-  "name": "prime-ja-subs",
+  "name": "jimaku",
   "version": "0.1.0",
   "description": "Chrome extension that translates Amazon Prime Video's English subtitles into Japanese using Claude and overlays them on the player",
   "private": true,

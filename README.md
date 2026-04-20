@@ -1,4 +1,4 @@
-# Subtitle
+# Jimaku
 
 A Chrome extension that translates video subtitles into Japanese in real time using Claude, and overlays them on top of the player.
 
