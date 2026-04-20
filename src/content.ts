@@ -628,6 +628,8 @@ function pickCandidateByNative(): Candidate | null {
 
 let resolveInterval: number | null = null;
 async function considerActiveTrack() {
+  // If native caption text matches any loaded candidate, prefer it — that's
+  // the track Prime Video is actually rendering.
   const matched = pickCandidateByNative();
   if (matched && matched.url !== state.subtitleUrl) {
     if (resolveInterval !== null) {
@@ -637,7 +639,28 @@ async function considerActiveTrack() {
     await applySubtitleUrl(matched.url);
     return;
   }
-  // No match yet — poll until native captions appear and a candidate matches.
+  // Fallback: if we haven't locked onto any URL yet and all fetched
+  // candidates are done loading, pick the one with the most cues. Ancillary
+  // tracks (forced-narrative, intro cards) have a handful of cues; the main
+  // episode track has hundreds.
+  if (!state.subtitleUrl && subtitleCandidates.size > 0) {
+    const all = [...subtitleCandidates.values()];
+    if (all.every((c) => c.cues !== null)) {
+      const best = all.reduce((a, b) =>
+        (a.cues?.length ?? 0) >= (b.cues?.length ?? 0) ? a : b,
+      );
+      if (best.cues && best.cues.length > 0) {
+        if (resolveInterval !== null) {
+          window.clearInterval(resolveInterval);
+          resolveInterval = null;
+        }
+        await applySubtitleUrl(best.url);
+        return;
+      }
+    }
+  }
+  // Still nothing actionable — poll so we re-check as candidates finish
+  // loading and as native captions start appearing.
   if (!state.subtitleUrl && resolveInterval === null) {
     resolveInterval = window.setInterval(() => {
       void considerActiveTrack();
@@ -681,11 +704,14 @@ async function loadOrTranslate() {
     await hydrateSourceCues(state.subtitleUrl, cached);
     const video = findVideo();
     if (video) attachVideoSync(video);
-    if (cached.complete === false && state.enabled && isMainVideoPlaying()) {
+    const isPartial = cached.complete === false;
+    if (isPartial && state.enabled && isMainVideoPlaying()) {
       void runTranslation(cached.cues.slice());
       return;
     }
-    state.status = "ready";
+    // Partial cache without playback → stay in "detected" so the popup and
+    // icon reflect that we'll resume on play, not that we're done.
+    state.status = isPartial ? "detected" : "ready";
     broadcastState();
     return;
   }
@@ -733,16 +759,34 @@ function onEnabledChanged(next: boolean) {
   }
 }
 
-// Watch any <video> that's large enough to be the main episode and invoke
-// loadOrTranslate once it starts playing. This is the "user clicked Play"
-// trigger that gates translation from kicking off on the detail page.
+// Poll the video element state instead of relying on play/pause events. Prime
+// Video swaps video elements (trailer → episode) and the `play` event can
+// fire before `duration` is loaded, making event-based detection flaky.
+// Polling checks the truth at the end (is a long-duration video playing?)
+// every 500ms and reacts to transitions.
 function watchForPlayback() {
-  const onPlay = (e: Event) => {
-    const v = e.target as HTMLVideoElement | null;
-    if (!v || v.duration <= MAIN_VIDEO_MIN_DURATION) return;
-    if (state.subtitleUrl && state.status !== "translating") void loadOrTranslate();
-  };
-  document.addEventListener("play", onPlay, true);
+  let wasPlayingMain = false;
+  window.setInterval(() => {
+    const playing = isMainVideoPlaying();
+    if (playing === wasPlayingMain) return;
+    wasPlayingMain = playing;
+    if (playing) {
+      // Transitioned to playing — start/resume if we have a URL and nothing
+      // is currently running.
+      if (state.subtitleUrl && state.status !== "translating") {
+        void loadOrTranslate();
+      }
+    } else {
+      // Transitioned to not-playing — abort any in-flight run. Partial cache
+      // from the last write (≤2s ago) survives; the next play resumes.
+      if (state.status === "translating") {
+        state.abortCtrl?.abort();
+        state.abortCtrl = null;
+        state.status = "detected";
+        broadcastState();
+      }
+    }
+  }, 500);
 }
 
 function watchForVideo() {

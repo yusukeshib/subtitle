@@ -240,8 +240,14 @@ async function callClaudeStreaming(
   if (!res.ok || !res.body) {
     const err = await res.text().catch(() => "");
     const e = new Error(`Claude API ${res.status}: ${err}`);
-    (e as Error & { status?: number }).status = res.status;
-    throw e;
+    const ext = e as Error & { status?: number; retryAfterMs?: number };
+    ext.status = res.status;
+    const ra = res.headers.get("retry-after");
+    if (ra) {
+      const n = Number(ra);
+      if (Number.isFinite(n) && n > 0) ext.retryAfterMs = n * 1000;
+    }
+    throw ext;
   }
 
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
@@ -316,7 +322,9 @@ async function callClaudeWithRetry(
     } catch (e) {
       lastErr = e;
       if (!isRetryable(e) || attempt === MAX_ATTEMPTS - 1) throw e;
-      const backoff = Math.min(30000, 1000 * 2 ** attempt) + Math.random() * 500;
+      const retryAfterMs = (e as { retryAfterMs?: number }).retryAfterMs;
+      const backoff =
+        retryAfterMs ?? Math.min(30000, 1000 * 2 ** attempt) + Math.random() * 500;
       await sleep(backoff, signal);
     }
   }
@@ -347,14 +355,20 @@ export async function translateCues(
       onProgress?.(total, total);
       return [...resumeFrom];
     }
-    const priorXml = resumeFrom
+    // Send only the tail of the prior translation as inline style context.
+    // Full-prior would be ideal but blows past the 30K input-tokens/min rate
+    // limit for long episodes. 60 recent cues is enough to anchor character
+    // voice and naming without overflowing the window.
+    const PRIOR_CONTEXT_WINDOW = 60;
+    const priorTail = resumeFrom.slice(-PRIOR_CONTEXT_WINDOW);
+    const priorXml = priorTail
       .map(
         (c) =>
           `<line start="${c.start.toFixed(2)}" end="${c.end.toFixed(2)}">${escapeXml(c.text.trim())}</line>`,
       )
       .join("\n");
     userContent =
-      `Resuming a partial translation. Maintain the same style, naming, and voice as the already-translated section below. Output <line> tags ONLY for the remaining source cues — do not re-emit any of the already-translated lines.\n\n` +
+      `Resuming a partial translation. Maintain the same style, naming, and voice as the already-translated section below (most recent ${priorTail.length} cues shown). Output <line> tags ONLY for the remaining source cues — do not re-emit any of the already-translated lines.\n\n` +
       `<already_translated>\n${priorXml}\n</already_translated>\n\n` +
       `${serializeInput(remaining)}`;
   } else {

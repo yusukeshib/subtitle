@@ -92,7 +92,7 @@ const STATUS_COLORS: Record<StateSnapshot["status"], string> = {
 };
 const DISABLED_COLOR = "#4b5563";
 
-function drawIcon(size: number, color: string): ImageData {
+function drawIcon(size: number, color: string, waiting: boolean): ImageData {
   const canvas = new OffscreenCanvas(size, size);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("OffscreenCanvas 2D context unavailable");
@@ -106,21 +106,38 @@ function drawIcon(size: number, color: string): ImageData {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText("CC", size / 2, size / 2 + Math.round(size * 0.04));
+  if (waiting) {
+    // Three dots in the bottom-right to signal "waiting for playback".
+    const dotR = Math.max(1, Math.round(size * 0.06));
+    const gap = Math.round(size * 0.08);
+    const y = size - dotR - Math.round(size * 0.08);
+    const rightEdge = size - Math.round(size * 0.08);
+    ctx.fillStyle = STATUS_COLORS.translating;
+    for (let i = 0; i < 3; i++) {
+      const x = rightEdge - dotR - i * gap;
+      ctx.beginPath();
+      ctx.arc(x, y, dotR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   return ctx.getImageData(0, 0, size, size);
 }
 
-function iconSet(color: string) {
+function iconSet(color: string, waiting: boolean = false) {
   return {
-    "16": drawIcon(16, color),
-    "32": drawIcon(32, color),
-    "48": drawIcon(48, color),
-    "128": drawIcon(128, color),
+    "16": drawIcon(16, color, waiting),
+    "32": drawIcon(32, color, waiting),
+    "48": drawIcon(48, color, waiting),
+    "128": drawIcon(128, color, waiting),
   };
 }
 
 async function applyIcon(tabId: number, s: StateSnapshot) {
   const color = s.enabled ? STATUS_COLORS[s.status] : DISABLED_COLOR;
-  await chrome.action.setIcon({ tabId, imageData: iconSet(color) }).catch(() => {});
+  // "Waiting" = subtitle detected but translation hasn't kicked off yet
+  // (usually because playback hasn't started on the detail page).
+  const waiting = s.enabled && s.status === "detected";
+  await chrome.action.setIcon({ tabId, imageData: iconSet(color, waiting) }).catch(() => {});
 }
 
 chrome.runtime.onInstalled.addListener(() => {
