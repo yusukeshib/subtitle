@@ -1,13 +1,12 @@
 import { attachCalibration } from "./content/calibration";
-import { normalizeCueText } from "./content/cueList";
 import {
   applyHideOriginal as applyHideOriginalImpl,
-  nativeCaptionEl,
   setOverlayText,
   updateOverlayPosition as updateOverlayPositionImpl,
 } from "./content/overlay";
 import { findVideo, isMainVideoPlaying, watchForPlayback, watchForVideo } from "./content/playback";
 import { state } from "./content/state";
+import { createTrackResolver } from "./content/trackResolver";
 import {
   DEFAULT_TARGET_LANGUAGE,
   getApiKey,
@@ -246,11 +245,7 @@ async function fetchSubtitleText(url: string, signal?: AbortSignal): Promise<str
 function resetState() {
   clearPerUrlState();
   state.subtitleUrl = null;
-  subtitleCandidates.clear();
-  if (resolveInterval !== null) {
-    window.clearInterval(resolveInterval);
-    resolveInterval = null;
-  }
+  trackResolver.clear();
   state.transition("idle", "tab reset");
   broadcastState();
 }
@@ -269,81 +264,13 @@ async function hydrateSourceCues(url: string, cached: { sourceCues?: Cue[] }) {
   }
 }
 
-// Prime Video fetches several subtitle tracks in parallel at session start
-// (primary + other languages). We can't tell which is active from the URL
-// alone — they're opaque UUIDs — so we prefetch each candidate's cues and
-// match against whatever text is currently in the native caption DOM. The
-// track whose source cues contain the on-screen caption is the active one.
-type Candidate = { url: string; cues: Cue[] | null };
-const subtitleCandidates = new Map<string, Candidate>();
-
-function handleSubtitleDetected(url: string) {
-  if (subtitleCandidates.has(url)) return;
-  const entry: Candidate = { url, cues: null };
-  subtitleCandidates.set(url, entry);
-  void (async () => {
-    try {
-      const text = await fetchSubtitleText(url);
-      entry.cues = await loadCues(url, text, fetchSubtitleText);
-    } catch {
-      entry.cues = [];
-    }
-    void considerActiveTrack();
-  })();
-  void considerActiveTrack();
-}
-
-function pickCandidateByNative(): Candidate | null {
-  const raw = nativeCaptionEl()?.textContent?.trim();
-  if (!raw) return null;
-  const target = normalizeCueText(raw);
-  if (!target) return null;
-  for (const c of subtitleCandidates.values()) {
-    if (!c.cues) continue;
-    if (c.cues.some((x) => normalizeCueText(x.text) === target)) return c;
-  }
-  return null;
-}
-
-let resolveInterval: number | null = null;
-async function considerActiveTrack() {
-  // If native caption text matches any loaded candidate, prefer it — that's
-  // the track Prime Video is actually rendering.
-  const matched = pickCandidateByNative();
-  if (matched && matched.url !== state.subtitleUrl) {
-    if (resolveInterval !== null) {
-      window.clearInterval(resolveInterval);
-      resolveInterval = null;
-    }
-    await applySubtitleUrl(matched.url);
-    return;
-  }
-  // Fallback: if we haven't locked onto any URL yet and all fetched
-  // candidates are done loading, pick the one with the most cues. Ancillary
-  // tracks (forced-narrative, intro cards) have a handful of cues; the main
-  // episode track has hundreds.
-  if (!state.subtitleUrl && subtitleCandidates.size > 0) {
-    const all = [...subtitleCandidates.values()];
-    if (all.every((c) => c.cues !== null)) {
-      const best = all.reduce((a, b) => ((a.cues?.length ?? 0) >= (b.cues?.length ?? 0) ? a : b));
-      if (best.cues && best.cues.length > 0) {
-        if (resolveInterval !== null) {
-          window.clearInterval(resolveInterval);
-          resolveInterval = null;
-        }
-        await applySubtitleUrl(best.url);
-        return;
-      }
-    }
-  }
-  // Still nothing actionable — poll so we re-check as candidates finish
-  // loading and as native captions start appearing.
-  if (!state.subtitleUrl && resolveInterval === null) {
-    resolveInterval = window.setInterval(() => {
-      void considerActiveTrack();
-    }, 500);
-  }
-}
+// Resolver owns the candidate pool and picks the active track (see
+// ./content/trackResolver). Wired with callbacks so the orchestrator
+// stays in control of URL changes.
+const trackResolver = createTrackResolver({
+  getCurrentUrl: () => state.subtitleUrl,
+  onResolved: (url) => void applySubtitleUrl(url),
+});
 
 // Clear per-URL state via the store, then blank the overlay (owned here).
 function clearPerUrlState() {
@@ -441,7 +368,7 @@ function onVideoFound(video: HTMLVideoElement) {
 chrome.runtime.onMessage.addListener((raw: ExtensionMessage) => {
   switch (raw.type) {
     case "SUBTITLE_DETECTED":
-      void handleSubtitleDetected(raw.url);
+      trackResolver.add(raw.url);
       break;
     case "TAB_RESET":
       resetState();
