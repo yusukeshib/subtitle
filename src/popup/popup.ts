@@ -1,10 +1,13 @@
 import {
+  DEFAULT_TARGET_LANGUAGE,
   getHideOriginal,
   getShowTranslated,
+  getTargetLanguage,
   setHideOriginal,
   setShowTranslated,
+  setTargetLanguage,
 } from "../lib/cache";
-import { MODEL, TARGET_LANGUAGE } from "../lib/translate";
+import { MODEL } from "../lib/translate";
 import type {
   ExtensionMessage,
   PopupGetState,
@@ -13,6 +16,37 @@ import type {
   StateSnapshot,
   Status,
 } from "../types";
+
+const LANGUAGES = [
+  "Japanese",
+  "Korean",
+  "Chinese (Simplified)",
+  "Chinese (Traditional)",
+  "English",
+  "Spanish",
+  "French",
+  "German",
+  "Italian",
+  "Portuguese (Brazilian)",
+  "Portuguese (European)",
+  "Russian",
+  "Dutch",
+  "Polish",
+  "Turkish",
+  "Arabic",
+  "Hindi",
+  "Thai",
+  "Vietnamese",
+  "Indonesian",
+  "Swedish",
+  "Norwegian",
+  "Danish",
+  "Finnish",
+  "Greek",
+  "Hebrew",
+  "Czech",
+  "Ukrainian",
+];
 
 const sub = document.getElementById("sub") as HTMLParagraphElement;
 const dot = document.getElementById("dot") as HTMLSpanElement;
@@ -26,9 +60,27 @@ const modelLabel = document.getElementById("modelLabel") as HTMLSpanElement;
 const openOptions = document.getElementById("openOptions") as HTMLAnchorElement;
 const showTranslatedCb = document.getElementById("showTranslated") as HTMLInputElement;
 const hideOriginalCb = document.getElementById("hideOriginal") as HTMLInputElement;
+const languageSelect = document.getElementById("targetLanguage") as HTMLSelectElement;
 
-modelLabel.textContent = `${MODEL} · → ${TARGET_LANGUAGE}`;
 sub.textContent = "Translates Prime Video subtitles with Claude.";
+
+let currentLanguage = DEFAULT_TARGET_LANGUAGE;
+
+function populateLanguageOptions(selected: string) {
+  const names = LANGUAGES.includes(selected) ? LANGUAGES : [selected, ...LANGUAGES];
+  languageSelect.innerHTML = "";
+  for (const name of names) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    if (name === selected) opt.selected = true;
+    languageSelect.appendChild(opt);
+  }
+}
+
+function setModelLabel() {
+  modelLabel.textContent = `${MODEL} · → ${currentLanguage}`;
+}
 
 openOptions.addEventListener("click", (e) => {
   e.preventDefault();
@@ -41,11 +93,21 @@ void getShowTranslated().then((v) => {
 void getHideOriginal().then((v) => {
   hideOriginalCb.checked = v;
 });
+void getTargetLanguage().then((l) => {
+  currentLanguage = l;
+  populateLanguageOptions(l);
+  setModelLabel();
+});
 showTranslatedCb.addEventListener("change", () => {
   void setShowTranslated(showTranslatedCb.checked);
 });
 hideOriginalCb.addEventListener("change", () => {
   void setHideOriginal(hideOriginalCb.checked);
+});
+languageSelect.addEventListener("change", () => {
+  currentLanguage = languageSelect.value;
+  setModelLabel();
+  void setTargetLanguage(currentLanguage);
 });
 
 let activeTabId: number | null = null;
@@ -78,14 +140,14 @@ function render(s: StateSnapshot) {
     idle: "Waiting for a subtitle track…",
     detected: "Subtitle track detected.",
     translating: "Translating…",
-    ready: `${TARGET_LANGUAGE} subtitles ready.`,
+    ready: `${currentLanguage} subtitles ready.`,
     error: "Something went wrong.",
   };
   statusText.textContent = label[s.status];
 
   if (s.status === "detected") {
     action.classList.remove("hidden");
-    action.textContent = `Generate ${TARGET_LANGUAGE} subtitles`;
+    action.textContent = `Generate ${currentLanguage} subtitles`;
   } else if (s.status === "translating") {
     const p = s.progress;
     const total = p?.total ?? 0;
@@ -147,7 +209,6 @@ async function init() {
     renderUnreachable();
     return;
   }
-  // If no STATE_UPDATE arrives shortly, fall back to unreachable message.
   setTimeout(() => {
     if (!contentReachable) renderUnreachable();
   }, 500);

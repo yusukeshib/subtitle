@@ -1,10 +1,12 @@
 import {
+  DEFAULT_TARGET_LANGUAGE,
   deleteCache,
   getApiKey,
   getCache,
   getHideOriginal,
   getOffsetSeconds,
   getShowTranslated,
+  getTargetLanguage,
   setCache,
 } from "./lib/cache";
 import { loadCues } from "./lib/subtitle";
@@ -45,6 +47,7 @@ type State = {
   offsetSeconds: number;
   showTranslated: boolean;
   hideOriginal: boolean;
+  targetLanguage: string;
 };
 
 const state: State = {
@@ -60,6 +63,7 @@ const state: State = {
   offsetSeconds: 0,
   showTranslated: true,
   hideOriginal: false,
+  targetLanguage: DEFAULT_TARGET_LANGUAGE,
 };
 
 function snapshot(): StateSnapshot {
@@ -148,7 +152,7 @@ function repaintOverlay() {
   const v = state.video;
   if (!v) return;
   const cue = findCueAt(v.currentTime - state.offsetSeconds);
-  setOverlayText(cue ? cue.ja : "");
+  setOverlayText(cue ? cue.text : "");
 }
 
 function applyHideOriginal() {
@@ -202,7 +206,7 @@ function attachVideoSync(video: HTMLVideoElement) {
       return;
     }
     const cue = findCueAt(video.currentTime - state.offsetSeconds);
-    setOverlayText(cue ? cue.ja : "");
+    setOverlayText(cue ? cue.text : "");
   };
   video.addEventListener("timeupdate", onUpdate);
   state.cleanupVideo = () => {
@@ -236,6 +240,9 @@ async function startTranslation() {
   broadcastState();
 
   const targetUrl = state.subtitleUrl;
+  const targetLang = state.targetLanguage;
+
+  const stillCurrent = () => state.subtitleUrl === targetUrl && state.targetLanguage === targetLang;
 
   try {
     const text = await fetchSubtitleText(targetUrl, signal);
@@ -249,20 +256,21 @@ async function startTranslation() {
 
     const translated = await translateCues(cues, apiKey, {
       signal,
+      targetLanguage: targetLang,
       onProgress: (done, total) => {
-        if (state.subtitleUrl !== targetUrl) return;
+        if (!stillCurrent()) return;
         state.progress = { done, total };
         broadcastState();
       },
     });
 
-    if (state.subtitleUrl !== targetUrl) return; // SPA navigated away
+    if (!stillCurrent()) return;
 
     setCues(translated);
     state.status = "ready";
     broadcastState();
 
-    await setCache(targetUrl, {
+    await setCache(targetUrl, targetLang, {
       translatedAt: Date.now(),
       model: MODEL,
       cues: translated,
@@ -272,7 +280,7 @@ async function startTranslation() {
     if (video) attachVideoSync(video);
   } catch (e) {
     if (e instanceof AbortError || (e as Error).name === "AbortError") return;
-    if (state.subtitleUrl !== targetUrl) return;
+    if (!stillCurrent()) return;
     state.status = "error";
     state.error = e instanceof Error ? e.message : String(e);
     broadcastState();
@@ -292,7 +300,7 @@ async function regenerate() {
   state.sortedStarts = null;
   state.progress = null;
   state.error = null;
-  await deleteCache(url);
+  await deleteCache(url, state.targetLanguage);
   state.status = "detected";
   broadcastState();
   await startTranslation();
@@ -322,7 +330,7 @@ async function handleSubtitleDetected(url: string) {
   if (state.subtitleUrl === url) return;
   state.subtitleUrl = url;
 
-  const cached = await getCache(url);
+  const cached = await getCache(url, state.targetLanguage);
   if (cached) {
     setCues(cached.cues);
     state.status = "ready";
@@ -336,6 +344,34 @@ async function handleSubtitleDetected(url: string) {
     state.status = "detected";
     broadcastState();
   }
+}
+
+async function onTargetLanguageChanged() {
+  state.abortCtrl?.abort();
+  state.abortCtrl = null;
+  state.cleanupVideo?.();
+  setOverlayText("");
+  state.cues = null;
+  state.sortedStarts = null;
+  state.progress = null;
+  state.error = null;
+
+  if (!state.subtitleUrl) {
+    state.status = "idle";
+    broadcastState();
+    return;
+  }
+  const cached = await getCache(state.subtitleUrl, state.targetLanguage);
+  if (cached) {
+    setCues(cached.cues);
+    state.status = "ready";
+    broadcastState();
+    const video = findVideo();
+    if (video) attachVideoSync(video);
+    return;
+  }
+  state.status = "detected";
+  broadcastState();
 }
 
 function watchForVideo() {
@@ -392,6 +428,9 @@ void getHideOriginal().then((v) => {
   state.hideOriginal = v;
   applyHideOriginal();
 });
+void getTargetLanguage().then((l) => {
+  state.targetLanguage = l;
+});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
   if (changes.offsetSeconds) {
@@ -404,6 +443,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.hideOriginal) {
     state.hideOriginal = changes.hideOriginal.newValue === true;
     applyHideOriginal();
+  }
+  if (changes.targetLanguage) {
+    const v = changes.targetLanguage.newValue;
+    state.targetLanguage = typeof v === "string" && v.trim() ? v : DEFAULT_TARGET_LANGUAGE;
+    void onTargetLanguageChanged();
   }
 });
 

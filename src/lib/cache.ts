@@ -2,7 +2,7 @@ import type { CacheEntry } from "../types";
 
 // Bump this when the cue-schema or translation behaviour changes so stale
 // cached entries are ignored rather than mixed with the new format.
-const CACHE_SCHEMA = 2;
+const CACHE_SCHEMA = 3;
 const PREFIX = `sub/v${CACHE_SCHEMA}:`;
 
 async function sha256(input: string): Promise<string> {
@@ -11,24 +11,24 @@ async function sha256(input: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function keyForUrl(url: string): Promise<string> {
-  const h = await sha256(url);
+export async function keyFor(url: string, lang: string): Promise<string> {
+  const h = await sha256(`${lang}\n${url}`);
   return PREFIX + h;
 }
 
-export async function getCache(url: string): Promise<CacheEntry | null> {
-  const key = await keyForUrl(url);
+export async function getCache(url: string, lang: string): Promise<CacheEntry | null> {
+  const key = await keyFor(url, lang);
   const res = await chrome.storage.local.get(key);
   return (res[key] as CacheEntry | undefined) ?? null;
 }
 
-export async function setCache(url: string, entry: CacheEntry): Promise<void> {
-  const key = await keyForUrl(url);
+export async function setCache(url: string, lang: string, entry: CacheEntry): Promise<void> {
+  const key = await keyFor(url, lang);
   await chrome.storage.local.set({ [key]: entry });
 }
 
-export async function deleteCache(url: string): Promise<void> {
-  const key = await keyForUrl(url);
+export async function deleteCache(url: string, lang: string): Promise<void> {
+  const key = await keyFor(url, lang);
   await chrome.storage.local.remove(key);
 }
 
@@ -49,6 +49,18 @@ export async function getOffsetSeconds(): Promise<number> {
 
 export async function setOffsetSeconds(offsetSeconds: number): Promise<void> {
   await chrome.storage.local.set({ offsetSeconds });
+}
+
+export const DEFAULT_TARGET_LANGUAGE = "Japanese";
+
+export async function getTargetLanguage(): Promise<string> {
+  const res = await chrome.storage.local.get("targetLanguage");
+  const v = res.targetLanguage;
+  return typeof v === "string" && v.trim() ? v : DEFAULT_TARGET_LANGUAGE;
+}
+
+export async function setTargetLanguage(lang: string): Promise<void> {
+  await chrome.storage.local.set({ targetLanguage: lang });
 }
 
 export async function getShowTranslated(): Promise<boolean> {

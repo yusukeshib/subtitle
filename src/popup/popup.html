@@ -97,6 +97,33 @@
       }
       .toggle input { margin: 0; }
       .toggle label { cursor: pointer; }
+      .lang-row {
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid #eaeaea;
+      }
+      .lang-row label {
+        display: block;
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 4px;
+      }
+      .lang-row select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        padding: 7px 28px 7px 8px;
+        font-size: 13px;
+        color: #1a1a1a;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background:
+          #fff
+          url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23666' d='M0 0l5 6 5-6z'/></svg>")
+          no-repeat right 10px center;
+        font-family: inherit;
+        cursor: pointer;
+      }
       .meta {
         font-size: 11px;
         color: #888;
@@ -124,9 +151,14 @@
 
       <p class="err" id="err" style="display:none;"></p>
 
+      <div class="lang-row">
+        <label for="targetLanguage">Target language</label>
+        <select id="targetLanguage"></select>
+      </div>
+
       <div class="toggles">
         <div class="toggle">
-          <label for="showTranslated">Show Japanese overlay</label>
+          <label for="showTranslated">Show translated overlay</label>
           <input id="showTranslated" type="checkbox" />
         </div>
         <div class="toggle">

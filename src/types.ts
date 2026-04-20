@@ -7,7 +7,7 @@ export type Cue = {
 export type TranslatedCue = {
   start: number;
   end: number;
-  ja: string;
+  text: string;
 };
 
 export type CacheEntry = {
