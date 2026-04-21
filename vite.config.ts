@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { watch as fsWatch } from "node:fs";
 import { crx } from "@crxjs/vite-plugin";
+import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import manifest from "./manifest.config";
 
@@ -40,7 +41,7 @@ function watchGitHead(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [crx({ manifest }), watchGitHead()],
+  plugins: [react(), crx({ manifest }), watchGitHead()],
   define: {
     __BUILD_VERSION__: JSON.stringify(buildVersion()),
   },

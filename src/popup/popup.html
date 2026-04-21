@@ -243,73 +243,7 @@
     </style>
   </head>
   <body>
-    <div class="wrap">
-      <h1>Jimaku</h1>
-      <p class="sub" id="sub">—</p>
-
-      <div class="status-row">
-        <span class="dot idle" id="dot"></span>
-        <span id="statusText">Checking…</span>
-      </div>
-
-      <p id="titleText" class="sub" style="margin:-4px 0 10px; display:none;"></p>
-
-      <div class="bar hidden" id="bar"><div id="barFill"></div></div>
-
-      <p class="err" id="err" style="display:none;"></p>
-
-      <div class="toggle" style="margin-top:4px;">
-        <label for="enabled">Auto-translate</label>
-        <input id="enabled" type="checkbox" />
-      </div>
-
-      <div class="lang-row">
-        <label for="targetLanguage">Target language</label>
-        <select id="targetLanguage"></select>
-      </div>
-
-      <div class="toggles">
-        <div class="toggle">
-          <label for="showTranslated">Show translated overlay</label>
-          <input id="showTranslated" type="checkbox" />
-        </div>
-        <div class="toggle">
-          <label for="hideOriginal">Hide original subtitles</label>
-          <input id="hideOriginal" type="checkbox" />
-        </div>
-      </div>
-
-      <div class="api-row">
-        <label for="provider">Translation provider</label>
-        <select id="provider">
-          <option value="anthropic">Anthropic (Claude)</option>
-          <option value="openai">OpenAI (GPT)</option>
-          <option value="openrouter">OpenRouter</option>
-        </select>
-
-        <div id="manualKeyBlock">
-          <label for="apiKey" id="apiKeyLabel">API key</label>
-          <div class="row">
-            <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
-            <button id="saveApiKey" type="button">Save</button>
-          </div>
-        </div>
-        <div id="openrouterConnected" class="connected" style="display:none;">
-          <span class="label">Connected to OpenRouter</span>
-          <button id="disconnectOpenrouter" type="button" class="link-btn">Disconnect</button>
-        </div>
-        <button id="connectOpenrouter" type="button" class="secondary" style="display:none;">Connect with OpenRouter</button>
-        <p class="saved" id="apiKeyStatus"></p>
-        <p class="hint">
-          <a id="getKeyLink" target="_blank" rel="noopener">Get a key</a>
-          · Stored in chrome.storage.local in plaintext. Not for shared machines.
-        </p>
-      </div>
-
-      <p class="meta">
-        <span id="modelLabel"></span>
-      </p>
-    </div>
-    <script type="module" src="./popup.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./popup.tsx"></script>
   </body>
 </html>
