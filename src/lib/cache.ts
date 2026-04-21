@@ -1,4 +1,5 @@
 import type { CacheEntry } from "../types";
+import { PROVIDERS, type ProviderConfig, type ProviderId } from "./providers";
 
 // Bump this when the cue-schema or translation behaviour changes so stale
 // cached entries are ignored rather than mixed with the new format.
@@ -32,13 +33,43 @@ export async function deleteCache(url: string, lang: string): Promise<void> {
   await chrome.storage.local.remove(key);
 }
 
-export async function getApiKey(): Promise<string | null> {
-  const res = await chrome.storage.local.get("apiKey");
-  return (res.apiKey as string | undefined) ?? null;
+const KEY_STORAGE: Record<ProviderId, string> = {
+  anthropic: "anthropicKey",
+  openai: "openaiKey",
+  openrouter: "openrouterKey",
+};
+
+export async function getProvider(): Promise<ProviderId> {
+  const res = await chrome.storage.local.get("provider");
+  const v = res.provider;
+  if (v === "anthropic" || v === "openai" || v === "openrouter") return v;
+  return "openrouter";
 }
 
-export async function setApiKey(apiKey: string): Promise<void> {
-  await chrome.storage.local.set({ apiKey });
+export async function setProvider(id: ProviderId): Promise<void> {
+  await chrome.storage.local.set({ provider: id });
+}
+
+export async function getProviderKey(id: ProviderId): Promise<string | null> {
+  const storageKey = KEY_STORAGE[id];
+  const res = await chrome.storage.local.get(storageKey);
+  const v = res[storageKey];
+  return typeof v === "string" && v ? v : null;
+}
+
+export async function setProviderKey(id: ProviderId, key: string): Promise<void> {
+  await chrome.storage.local.set({ [KEY_STORAGE[id]]: key });
+}
+
+export async function clearProviderKey(id: ProviderId): Promise<void> {
+  await chrome.storage.local.remove(KEY_STORAGE[id]);
+}
+
+export async function getProviderConfig(): Promise<ProviderConfig | null> {
+  const id = await getProvider();
+  const apiKey = await getProviderKey(id);
+  if (!apiKey) return null;
+  return { id, apiKey, model: PROVIDERS[id].defaultModel };
 }
 
 export const DEFAULT_TARGET_LANGUAGE = "Japanese";

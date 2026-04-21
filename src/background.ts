@@ -1,4 +1,12 @@
-import type { ExtensionMessage, StateSnapshot, SubtitleDetected, TabReset } from "./types";
+import { setProviderKey } from "./lib/cache";
+import { connectOpenRouter } from "./lib/openrouterAuth";
+import type {
+  ExtensionMessage,
+  OpenRouterConnectResult,
+  StateSnapshot,
+  SubtitleDetected,
+  TabReset,
+} from "./types";
 
 const SUBTITLE_URL_RE = /\.(vtt|dfxp|ttml2?)(\?|$)/i;
 const SUBTITLE_PATH_HINT = /(caption|subtitle|timedtext|subtitleset|-subs?-|_subs?_|\/subs\/)/i;
@@ -62,7 +70,7 @@ chrome.webRequest.onBeforeRequest.addListener(
   },
 );
 
-chrome.runtime.onMessage.addListener((raw: ExtensionMessage, sender) => {
+chrome.runtime.onMessage.addListener((raw: ExtensionMessage, sender, sendResponse) => {
   if (raw.type === "CONTENT_READY") {
     const tabId = sender.tab?.id;
     if (tabId === undefined) return;
@@ -80,6 +88,28 @@ chrome.runtime.onMessage.addListener((raw: ExtensionMessage, sender) => {
     applyBadge(tabId, raw.state);
     void applyIcon(tabId, raw.state);
     return;
+  }
+  if (raw.type === "OPENROUTER_CONNECT") {
+    // Handled in the SW so the flow survives the toolbar popup closing when
+    // the OAuth window takes focus. The popup learns about success via
+    // chrome.storage.onChanged (key land) and via this response (if still
+    // open). Return true to keep the message channel open for the async
+    // response.
+    void (async () => {
+      try {
+        const key = await connectOpenRouter();
+        await setProviderKey("openrouter", key);
+        const res: OpenRouterConnectResult = { ok: true };
+        sendResponse(res);
+      } catch (e) {
+        const res: OpenRouterConnectResult = {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        };
+        sendResponse(res);
+      }
+    })();
+    return true;
   }
 });
 

@@ -58,9 +58,16 @@ export type StateUpdate = {
   state: StateSnapshot;
 };
 
+export type OpenRouterConnect = {
+  type: "OPENROUTER_CONNECT";
+};
+
+export type OpenRouterConnectResult = { ok: true } | { ok: false; error: string };
+
 export type ExtensionMessage =
   | ContentReady
   | SubtitleDetected
   | TabReset
   | PopupGetState
-  | StateUpdate;
+  | StateUpdate
+  | OpenRouterConnect;

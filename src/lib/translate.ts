@@ -1,9 +1,8 @@
 import type { Cue, TranslatedCue } from "../types";
 import { CueSanitizer } from "./cueSanitize";
+import type { ProviderConfig } from "./providers";
+import { streamTranslation } from "./providers";
 
-export const MODEL = "claude-sonnet-4-6";
-const API_URL = "https://api.anthropic.com/v1/messages";
-const API_VERSION = "2023-06-01";
 const MAX_TOKENS = 32000;
 const MAX_ATTEMPTS = 4;
 
@@ -71,7 +70,7 @@ export type TranslateOptions = {
   // caller populate the overlay incrementally instead of waiting for the
   // full response.
   onCue?: CueEmit;
-  // When present, sent as an assistant-message prefill so Claude resumes
+  // When present, sent as an assistant-message prefill so the model resumes
   // generating from after the last cue instead of restarting. Preserves the
   // single-call context (character voice, naming) across interruptions.
   resumeFrom?: TranslatedCue[];
@@ -155,91 +154,34 @@ function parseLineXml(xml: string): ParsedLine | null {
   return { start, end, text };
 }
 
-async function callClaudeStreaming(
-  apiKey: string,
+async function streamAndParseLines(
+  config: ProviderConfig,
   userContent: string,
   systemPrompt: string,
   onLineDone: (parsed: ParsedLine | null) => void,
   signal?: AbortSignal,
 ): Promise<string> {
-  const body = {
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    stream: true,
-    system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: userContent }],
-  };
-  const res = await fetch(API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": API_VERSION,
-      "anthropic-dangerous-direct-browser-access": "true",
-    },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok || !res.body) {
-    const err = await res.text().catch(() => "");
-    const e = new Error(`Claude API ${res.status}: ${err}`);
-    const ext = e as Error & { status?: number; retryAfterMs?: number };
-    ext.status = res.status;
-    const ra = res.headers.get("retry-after");
-    if (ra) {
-      const n = Number(ra);
-      if (Number.isFinite(n) && n > 0) ext.retryAfterMs = n * 1000;
-    }
-    throw ext;
-  }
-
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
-  let buffer = "";
   let acc = "";
   let scanFrom = 0;
-
-  try {
+  const onTextDelta = (text: string) => {
+    acc += text;
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += value;
-      let sep = buffer.indexOf("\n\n");
-      while (sep !== -1) {
-        const raw = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        let eventType = "";
-        let dataStr = "";
-        for (const l of raw.split("\n")) {
-          if (l.startsWith("event:")) eventType = l.slice(6).trim();
-          else if (l.startsWith("data:")) dataStr = l.slice(5).trim();
-        }
-        if (eventType === "content_block_delta" && dataStr) {
-          try {
-            const d = JSON.parse(dataStr) as { delta?: { text?: string } };
-            const text = d.delta?.text ?? "";
-            if (text) {
-              acc += text;
-              while (true) {
-                const idx = acc.indexOf("</line>", scanFrom);
-                if (idx === -1) break;
-                const open = acc.lastIndexOf("<line", idx);
-                const parsed = open >= 0 ? parseLineXml(acc.slice(open, idx + 7)) : null;
-                scanFrom = idx + 7;
-                onLineDone(parsed);
-              }
-            }
-          } catch {}
-        } else if (eventType === "error" && dataStr) {
-          throw new Error(`Claude stream error: ${dataStr}`);
-        }
-        sep = buffer.indexOf("\n\n");
-      }
+      const idx = acc.indexOf("</line>", scanFrom);
+      if (idx === -1) break;
+      const open = acc.lastIndexOf("<line", idx);
+      const parsed = open >= 0 ? parseLineXml(acc.slice(open, idx + 7)) : null;
+      scanFrom = idx + 7;
+      onLineDone(parsed);
     }
-  } finally {
-    reader.releaseLock();
-  }
-  if (!acc) throw new Error("empty response from Claude");
-  return acc;
+  };
+  return await streamTranslation({
+    config,
+    systemPrompt,
+    userContent,
+    maxTokens: MAX_TOKENS,
+    onTextDelta,
+    signal,
+  });
 }
 
 function isRetryable(err: unknown): boolean {
@@ -249,8 +191,8 @@ function isRetryable(err: unknown): boolean {
   return status === 429 || status >= 500;
 }
 
-async function callClaudeWithRetry(
-  apiKey: string,
+async function callWithRetry(
+  config: ProviderConfig,
   userContent: string,
   systemPrompt: string,
   onLineDone: (parsed: ParsedLine | null) => void,
@@ -260,7 +202,7 @@ async function callClaudeWithRetry(
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (signal?.aborted) throw new AbortError();
     try {
-      return await callClaudeStreaming(apiKey, userContent, systemPrompt, onLineDone, signal);
+      return await streamAndParseLines(config, userContent, systemPrompt, onLineDone, signal);
     } catch (e) {
       lastErr = e;
       if (!isRetryable(e) || attempt === MAX_ATTEMPTS - 1) throw e;
@@ -274,7 +216,7 @@ async function callClaudeWithRetry(
 
 export async function translateCues(
   cues: Cue[],
-  apiKey: string,
+  config: ProviderConfig,
   opts: TranslateOptions,
 ): Promise<TranslatedCue[]> {
   const { signal, onProgress, onCue, resumeFrom, targetLanguage } = opts;
@@ -328,8 +270,8 @@ export async function translateCues(
   }
   const emittedNew: TranslatedCue[] = [];
 
-  await callClaudeWithRetry(
-    apiKey,
+  await callWithRetry(
+    config,
     userContent,
     systemPrompt,
     (parsed) => {

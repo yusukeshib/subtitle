@@ -156,24 +156,90 @@
         border: 1px solid #ccc;
         border-radius: 6px;
       }
+      .api-row select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        padding: 7px 28px 7px 8px;
+        font-size: 13px;
+        color: #1a1a1a;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background:
+          #fff
+          url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23666' d='M0 0l5 6 5-6z'/></svg>")
+          no-repeat right 10px center;
+        font-family: inherit;
+        cursor: pointer;
+        margin-bottom: 10px;
+      }
       .api-row button {
         flex: 0 0 auto;
         width: auto;
         padding: 7px 10px;
         font-size: 12px;
       }
+      .api-row button.secondary {
+        width: 100%;
+        margin-top: 8px;
+      }
+      .api-row .connected {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 10px;
+        background: #f1f8f2;
+        border: 1px solid #cfe3d1;
+        border-radius: 6px;
+        font-size: 12px;
+      }
+      .api-row .connected .label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #0a7a2f;
+      }
+      .api-row .connected .label::before {
+        content: "";
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #0a7a2f;
+      }
+      .api-row .connected .link-btn {
+        background: transparent;
+        color: #555;
+        border: none;
+        padding: 2px 4px;
+        font-size: 12px;
+        cursor: pointer;
+        width: auto;
+        text-decoration: underline;
+      }
+      .api-row .connected .link-btn:hover:not([disabled]) {
+        background: transparent;
+        color: #b91c1c;
+      }
       .api-row .hint {
         font-size: 10px;
-        color: #b46800;
+        color: #888;
         margin: 6px 0 0;
         line-height: 1.4;
       }
+      .api-row .hint a {
+        color: #0366d6;
+        text-decoration: none;
+      }
+      .api-row .hint a:hover { text-decoration: underline; }
       .api-row .saved {
         font-size: 10px;
         color: #0a7a2f;
         margin: 6px 0 0;
         min-height: 12px;
       }
+      .api-row .saved.error { color: #b91c1c; }
     </style>
   </head>
   <body>
@@ -214,13 +280,30 @@
       </div>
 
       <div class="api-row">
-        <label for="apiKey">Anthropic API key</label>
-        <div class="row">
-          <input id="apiKey" type="password" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" />
-          <button id="saveApiKey" type="button">Save</button>
+        <label for="provider">Translation provider</label>
+        <select id="provider">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+
+        <div id="manualKeyBlock">
+          <label for="apiKey" id="apiKeyLabel">API key</label>
+          <div class="row">
+            <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+            <button id="saveApiKey" type="button">Save</button>
+          </div>
         </div>
+        <div id="openrouterConnected" class="connected" style="display:none;">
+          <span class="label">Connected to OpenRouter</span>
+          <button id="disconnectOpenrouter" type="button" class="link-btn">Disconnect</button>
+        </div>
+        <button id="connectOpenrouter" type="button" class="secondary" style="display:none;">Connect with OpenRouter</button>
         <p class="saved" id="apiKeyStatus"></p>
-        <p class="hint">Stored in chrome.storage.local in plaintext. Not for shared machines.</p>
+        <p class="hint">
+          <a id="getKeyLink" target="_blank" rel="noopener">Get a key</a>
+          · Stored in chrome.storage.local in plaintext. Not for shared machines.
+        </p>
       </div>
 
       <p class="meta">

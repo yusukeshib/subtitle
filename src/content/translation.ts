@@ -1,6 +1,6 @@
-import { getApiKey, getCache, setCache } from "../lib/cache";
+import { getCache, getProviderConfig, setCache } from "../lib/cache";
 import { loadCues } from "../lib/subtitle";
-import { AbortError, MODEL, translateCues } from "../lib/translate";
+import { AbortError, translateCues } from "../lib/translate";
 import type { Cue, PlaybackState } from "../types";
 import { isMainVideoPlaying } from "./playback";
 import { state } from "./state";
@@ -37,8 +37,8 @@ async function runTranslation(resumeFrom: Cue[] | null) {
   // block a freshly-kicked translation.
   if (state.abortCtrl !== null) return;
 
-  const apiKey = await getApiKey();
-  if (!apiKey) {
+  const providerConfig = await getProviderConfig();
+  if (!providerConfig) {
     state.onTranslationFailed("No API key set. Open the extension options to add one.");
     return;
   }
@@ -69,7 +69,7 @@ async function runTranslation(resumeFrom: Cue[] | null) {
     let lastCacheWrite = 0;
     const CACHE_WRITE_INTERVAL_MS = 2000;
 
-    const translated = await translateCues(cues, apiKey, {
+    const translated = await translateCues(cues, providerConfig, {
       signal,
       targetLanguage: targetLang,
       resumeFrom: resumeCues ?? undefined,
@@ -85,7 +85,7 @@ async function runTranslation(resumeFrom: Cue[] | null) {
           lastCacheWrite = now;
           void setCache(targetUrl, targetLang, {
             translatedAt: now,
-            model: MODEL,
+            model: providerConfig.model,
             cues: state.cues.snapshot(),
             sourceCues: cues,
             complete: false,
@@ -100,7 +100,7 @@ async function runTranslation(resumeFrom: Cue[] | null) {
 
     await setCache(targetUrl, targetLang, {
       translatedAt: Date.now(),
-      model: MODEL,
+      model: providerConfig.model,
       cues: translated,
       sourceCues: cues,
       complete: true,

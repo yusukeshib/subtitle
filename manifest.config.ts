@@ -5,7 +5,7 @@ export default defineManifest({
   name: "Jimaku",
   version: "0.1.0",
   description: "Translate Amazon Prime Video subtitles with Claude and overlay them on the player",
-  permissions: ["storage", "webRequest", "webNavigation", "scripting"],
+  permissions: ["storage", "webRequest", "webNavigation", "scripting", "identity"],
   host_permissions: [
     "*://*.amazon.com/*",
     "*://*.amazon.co.jp/*",
@@ -14,6 +14,8 @@ export default defineManifest({
     "*://*.pv-cdn.net/*",
     "*://*.aiv-cdn.net/*",
     "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://openrouter.ai/*",
   ],
   background: {
     service_worker: "src/background.ts",
