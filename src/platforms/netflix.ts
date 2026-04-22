@@ -3,7 +3,7 @@ import { loadCues } from "../lib/subtitle";
 import type { Cue, OpenSubtitlesFetch, OpenSubtitlesFetchResult } from "../types";
 import type { Platform } from "./types";
 
-const NETFLIX_HOSTS = ["*://*.netflix.com/*", "*://*.nflxvideo.net/*"] as const;
+const NETFLIX_HOSTS = ["*://*.netflix.com/*"] as const;
 
 // Content script runs on /watch/<id> — that's the only page with the player.
 const NETFLIX_CONTENT_MATCHES = ["*://*.netflix.com/watch/*"] as const;
