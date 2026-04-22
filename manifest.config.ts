@@ -10,7 +10,7 @@ const API_HOSTS = [
 export default defineManifest({
   manifest_version: 3,
   name: "Jimaku",
-  version: "0.1.0",
+  version: "1.0.0",
   description:
     "AI subtitle translation that works with Prime Video and Netflix. Unofficial — not affiliated with Amazon or Netflix.",
   default_locale: "en",

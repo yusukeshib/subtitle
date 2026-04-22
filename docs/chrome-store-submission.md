@@ -4,6 +4,54 @@ Copy/paste-ready text for the fields in the Chrome Web Store Developer
 Dashboard. Keep this in sync with `manifest.config.ts` whenever
 permissions or hosts change.
 
+## Store listing — short description (132 char max)
+
+> AI subtitle translation that works with Prime Video and Netflix. Unofficial — not affiliated with Amazon or Netflix.
+
+(115 characters.)
+
+## Store listing — detailed description
+
+> Jimaku translates the subtitles of what you are watching on Prime
+> Video or Netflix into your chosen language, in real time, and
+> overlays the translated text on top of the player.
+>
+> Unofficial. Not affiliated with, sponsored by, or endorsed by Amazon
+> or Netflix.
+>
+> Pick a provider once in the popup:
+>
+> • OpenRouter — one-click OAuth, no key handling required
+> • Anthropic (Claude) — paste an API key
+> • OpenAI — paste an API key
+>
+> Your key stays in your browser and is only sent to the provider you
+> chose. Translation counts against your own usage / billing with that
+> provider.
+>
+> Language-learning mode (both translated and original captions
+> visible) and replacement mode (translated only) are both supported.
+>
+> Supported subtitle formats: WebVTT, SRT, TTML / DFXP, HLS WebVTT.
+>
+> Known limitations:
+>
+> • Occasional chunks may fall back to the original text if the
+>   model's response is malformed.
+> • API keys are stored in plain text in chrome.storage.local; do not
+>   use this extension on a shared browser profile.
+> • For Netflix, the subtitle file is matched by title + season +
+>   episode against OpenSubtitles. Coverage and edit-version mismatches
+>   can occur; the extension auto-calibrates timing offset against
+>   Netflix's own captions, but obscure or pre-release titles may not
+>   have a usable match.
+>
+> Source code: https://github.com/yusukeshib/jimaku
+
+## Category
+
+Productivity (primary) — alternatives: Accessibility.
+
 ## Single purpose
 
 Jimaku translates the English subtitle track of a video the user is
