@@ -4,6 +4,13 @@ Copy/paste-ready text for the fields in the Chrome Web Store Developer
 Dashboard. Keep this in sync with `manifest.config.ts` whenever
 permissions or hosts change.
 
+## Privacy policy URL
+
+`https://yusukeshib.github.io/jimaku/privacy-policy.html`
+
+Source: `docs/privacy-policy.md` on the `main` branch, served by
+GitHub Pages.
+
 ## Store listing — short description (132 char max)
 
 > AI subtitle translation that works with Prime Video and Netflix. Unofficial — not affiliated with Amazon or Netflix.

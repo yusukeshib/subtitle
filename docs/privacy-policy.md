@@ -1,3 +1,7 @@
+---
+title: Privacy Policy — Jimaku
+---
+
 # Jimaku — Privacy Policy
 
 _Last updated: 2026-04-21_
