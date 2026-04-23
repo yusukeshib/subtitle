@@ -1,11 +1,10 @@
-import { netflix } from "./netflix";
 import { primeVideo } from "./primevideo";
 import type { Platform } from "./types";
 
 export type { Platform, SubtitleSource } from "./types";
 
 /** All registered platforms. Add new entries here to enable support. */
-export const PLATFORMS: readonly Platform[] = [primeVideo, netflix];
+export const PLATFORMS: readonly Platform[] = [primeVideo];
 
 /** Pick the platform that owns `url`, or null if none match. */
 export function platformForUrl(url: string | URL): Platform | null {

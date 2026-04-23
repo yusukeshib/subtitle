@@ -1,8 +1,8 @@
 {
-  "tagline": { "message": "Traduit les sous-titres de Prime Video et Netflix avec l'IA." },
+  "tagline": { "message": "Traduit les sous-titres de Prime Video avec l'IA." },
   "status_checking": { "message": "Vérification…" },
   "status_open_streaming_page": {
-    "message": "Ouvrez une page Prime Video ou Netflix pour utiliser Jimaku."
+    "message": "Ouvrez une page Prime Video pour utiliser Jimaku."
   },
   "status_auto_translate_off": { "message": "La traduction automatique est désactivée." },
   "status_provider_setup_needed": {

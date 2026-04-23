@@ -93,9 +93,9 @@ function findCaptionTextRect(): { top: number; height: number } | null {
 }
 
 function computeFontSizePx(video: HTMLVideoElement | null): number | null {
-  // Derive from the video element's height. We used to mirror the native
-  // caption's inline font-size, but players like Netflix vary it per cue
-  // (and tear it down between cues), which made the overlay flicker.
+  // Derive from the video element's height rather than mirroring the native
+  // caption's inline font-size — some players vary it per cue (and tear the
+  // span down between cues), which makes the overlay flicker.
   if (!video) return null;
   const h = video.getBoundingClientRect().height;
   if (h <= 0) return null;

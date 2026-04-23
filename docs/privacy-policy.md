@@ -4,23 +4,22 @@ title: Privacy Policy — Jimaku
 
 # Jimaku — Privacy Policy
 
-_Last updated: 2026-04-21_
+_Last updated: 2026-04-23_
 
 Jimaku is a Chrome extension that translates the English subtitle
-track of a video the user is watching on Prime Video or Netflix and
-overlays the translated text on top of the player. This document
-describes what data Jimaku handles and with whom it is shared.
+track of a video the user is watching on Prime Video and overlays the
+translated text on top of the player. This document describes what
+data Jimaku handles and with whom it is shared.
 
 Jimaku is an independent project and is not affiliated with Amazon,
-Netflix, Anthropic, OpenAI, OpenRouter, or OpenSubtitles.
+Anthropic, OpenAI, or OpenRouter.
 
 ## TL;DR
 
 - Jimaku does not collect, store, or transmit data to any server
   operated by the developer. There is no backend.
 - The extension runs entirely in your browser. Data leaves your
-  browser only to (a) the translation provider **you** selected and
-  (b) OpenSubtitles, when you are watching Netflix.
+  browser only to the translation provider **you** selected.
 - Your API key or OAuth token stays in `chrome.storage.local` on your
   device. It is never sent anywhere except to the provider it
   authenticates.
@@ -62,24 +61,11 @@ Jimaku does not modify, proxy, or inspect these requests beyond what
 is necessary to construct the API call. The developer has no access
 to this traffic.
 
-### To OpenSubtitles (Netflix only)
-
-Netflix delivers captions inside an encrypted manifest that
-third-party code cannot read. To support Netflix, Jimaku looks up an
-English subtitle file on OpenSubtitles using the current title,
-season, and episode as the search query.
-
-- OpenSubtitles — [privacy policy](https://www.opensubtitles.org/en/privacy)
-
-Jimaku does not send Prime Video metadata to OpenSubtitles; this
-lookup happens only on Netflix pages.
-
 ## Data that is NOT collected
 
 Jimaku does not collect, log, or transmit:
 
-- Your browsing history or activity outside Prime Video / Netflix
-  player pages
+- Your browsing history or activity outside Prime Video player pages
 - Your account identity, email, or subscription information on any
   streaming service
 - Your IP address, device fingerprint, or any analytics
@@ -98,8 +84,8 @@ Store listing. In summary:
   single-page-app navigations
 - `identity` — to run the OpenRouter OAuth sign-in flow when you
   choose "Connect with OpenRouter"
-- Host permissions on streaming, CDN, provider, and OpenSubtitles
-  hosts — required for the mechanisms above
+- Host permissions on streaming, CDN, and provider hosts — required
+  for the mechanisms above
 
 ## Children
 

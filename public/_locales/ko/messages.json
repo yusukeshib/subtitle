@@ -1,8 +1,8 @@
 {
-  "tagline": { "message": "AI로 Prime Video와 Netflix 자막을 번역합니다." },
+  "tagline": { "message": "AI로 Prime Video 자막을 번역합니다." },
   "status_checking": { "message": "확인 중…" },
   "status_open_streaming_page": {
-    "message": "Prime Video 또는 Netflix 페이지를 열어 Jimaku를 사용하세요."
+    "message": "Prime Video 페이지를 열어 Jimaku를 사용하세요."
   },
   "status_auto_translate_off": { "message": "자동 번역이 꺼져 있습니다." },
   "status_provider_setup_needed": {

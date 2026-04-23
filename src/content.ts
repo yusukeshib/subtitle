@@ -6,7 +6,6 @@ import { resetSubtitleHint, updateSubtitleHint } from "./content/subtitleHint";
 import { createTrackResolver } from "./content/trackResolver";
 import {
   applySubtitleUrl,
-  cancelProvidedSubtitles,
   onEnabledChanged,
   onPlaybackTransition,
   onProviderReadyChanged,
@@ -88,7 +87,6 @@ chrome.runtime.onMessage.addListener((raw: ExtensionMessage) => {
       break;
     case "TAB_RESET":
       trackResolver.clear();
-      cancelProvidedSubtitles();
       state.onTabReset();
       resetSubtitleHint();
       break;

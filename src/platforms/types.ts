@@ -1,5 +1,3 @@
-import type { Cue } from "../types";
-
 /**
  * How a platform delivers subtitle cues to us.
  *
@@ -7,23 +5,11 @@ import type { Cue } from "../types";
  *     HLS-of-VTT) via a normal HTTP request. The background watches those
  *     requests and pushes URLs to the content script, which fetches and parses
  *     the file. Used by Prime Video.
- *
- *   - `provided`: we can't observe the subtitle file on the wire (e.g. Netflix
- *     bundles cues inside an MSL-encrypted manifest). The platform supplies
- *     cues itself — typically by looking up a public source like OpenSubtitles
- *     keyed on the current title/episode. `provide()` returns a stable
- *     `cacheKey` (used in lieu of a URL for the translation cache) plus the
- *     parsed cues, or `null` if no source is available.
  */
-export type SubtitleSource =
-  | { readonly kind: "network-intercept" }
-  | {
-      readonly kind: "provided";
-      provide(signal?: AbortSignal): Promise<{ cacheKey: string; cues: Cue[] } | null>;
-    };
+export type SubtitleSource = { readonly kind: "network-intercept" };
 
 /**
- * Abstraction over a streaming platform (Prime Video, Netflix, …).
+ * Abstraction over a streaming platform.
  *
  * The extension is platform-aware in three places:
  *   - Manifest: which hosts we request permission for, which URLs mount the

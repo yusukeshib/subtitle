@@ -11,8 +11,7 @@ export default defineManifest({
   manifest_version: 3,
   name: "Jimaku",
   version: "1.0.0",
-  description:
-    "AI subtitle translation that works with Prime Video and Netflix. Unofficial — not affiliated with Amazon or Netflix.",
+  description: "AI subtitle translation for Prime Video. Unofficial — not affiliated with Amazon.",
   default_locale: "en",
   permissions: ["storage", "webRequest", "webNavigation", "scripting", "identity"],
   host_permissions: [...allHostPermissions(), ...API_HOSTS],

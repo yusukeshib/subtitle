@@ -1,11 +1,9 @@
 import { setProviderKey } from "./lib/cache";
 import { connectOpenRouter } from "./lib/openrouterAuth";
-import { findFirstUsableSubtitle, searchSubtitleIds } from "./lib/opensubtitles";
 import { allWebNavigationFilters, allWebRequestUrls, platformForUrl } from "./platforms";
 import type {
   ExtensionMessage,
   OpenRouterConnectResult,
-  OpenSubtitlesFetchResult,
   StateSnapshot,
   SubtitleDetected,
   TabReset,
@@ -84,27 +82,6 @@ chrome.runtime.onMessage.addListener((raw: ExtensionMessage, sender, sendRespons
     applyBadge(tabId, raw.state);
     void applyIcon(tabId, raw.state);
     return;
-  }
-  if (raw.type === "OPENSUBTITLES_FETCH") {
-    // MV3 content scripts inherit the page's CORS origin, so cross-origin
-    // fetches to opensubtitles.org fail from Netflix even with
-    // host_permissions. Service workers are exempt — do the fetch here and
-    // hand the SRT text back to the content script.
-    void (async () => {
-      try {
-        const ids = await searchSubtitleIds({ query: raw.query, language: raw.language });
-        const srt = ids.length === 0 ? null : await findFirstUsableSubtitle(ids, raw.minCues);
-        const res: OpenSubtitlesFetchResult = { ok: true, srt };
-        sendResponse(res);
-      } catch (e) {
-        const res: OpenSubtitlesFetchResult = {
-          ok: false,
-          error: e instanceof Error ? e.message : String(e),
-        };
-        sendResponse(res);
-      }
-    })();
-    return true;
   }
   if (raw.type === "OPENROUTER_CONNECT") {
     // Handled in the SW so the flow survives the toolbar popup closing when

@@ -13,18 +13,17 @@ GitHub Pages.
 
 ## Store listing — short description (132 char max)
 
-> AI subtitle translation that works with Prime Video and Netflix. Unofficial — not affiliated with Amazon or Netflix.
+> AI subtitle translation for Prime Video. Unofficial — not affiliated with Amazon.
 
-(115 characters.)
+(82 characters.)
 
 ## Store listing — detailed description
 
 > Jimaku translates the subtitles of what you are watching on Prime
-> Video or Netflix into your chosen language, in real time, and
-> overlays the translated text on top of the player.
+> Video into your chosen language, in real time, and overlays the
+> translated text on top of the player.
 >
-> Unofficial. Not affiliated with, sponsored by, or endorsed by Amazon
-> or Netflix.
+> Unofficial. Not affiliated with, sponsored by, or endorsed by Amazon.
 >
 > Pick a provider once in the popup:
 >
@@ -47,11 +46,6 @@ GitHub Pages.
 >   model's response is malformed.
 > • API keys are stored in plain text in chrome.storage.local; do not
 >   use this extension on a shared browser profile.
-> • For Netflix, the subtitle file is matched by title + season +
->   episode against OpenSubtitles. Coverage and edit-version mismatches
->   can occur; the extension auto-calibrates timing offset against
->   Netflix's own captions, but obscure or pre-release titles may not
->   have a usable match.
 >
 > Source code: https://github.com/yusukeshib/jimaku
 
@@ -62,8 +56,8 @@ Productivity (primary) — alternatives: Accessibility.
 ## Single purpose
 
 Jimaku translates the English subtitle track of a video the user is
-currently watching on Prime Video or Netflix, and overlays the
-translated text on top of the player.
+currently watching on Prime Video, and overlays the translated text on
+top of the player.
 
 ## Permission justifications
 
@@ -81,13 +75,11 @@ Amazon's CDN. The extension uses webRequest in observe-only mode (no
 blocking, no redirection) to learn the URL of the active subtitle track
 so it can download and translate it. Without webRequest, there is no
 way to know which caption URL the player chose for the user's
-language/title. Netflix does not use webRequest — its subtitles are
-inside an encrypted manifest and are sourced from OpenSubtitles
-instead.
+language/title.
 
 ### `webNavigation`
 
-Prime Video and Netflix are single-page apps.
+Prime Video is a single-page app.
 `webNavigation.onHistoryStateUpdated` is used to detect when the user
 navigates to a different episode or title so the extension can reset
 its cached subtitle state for the new video.
@@ -117,17 +109,6 @@ with OpenRouter".
   CDNs that serve TTML/VTT subtitle files. Needed to (a) observe which
   subtitle URL the player picked via webRequest and (b) fetch the same
   file to translate it.
-- `*.netflix.com` — page where the Netflix player runs. The content
-  script renders the overlay here.
-
-### Subtitle source host
-
-- `*.opensubtitles.org`, `dl.opensubtitles.org` — Netflix delivers
-  captions inside an encrypted MSL manifest that third-party code
-  cannot read. To support Netflix, the extension looks up an English
-  subtitle file on OpenSubtitles using the current title/season/episode
-  and aligns it to Netflix's timestamps. This is the only way for a
-  subtitle-overlay extension to work on Netflix.
 
 ### Translation provider hosts
 
@@ -159,7 +140,7 @@ subtitle text and receive translated text — this is data, not code.
 | Location | No |
 | Web history | No |
 | User activity | No |
-| Website content | **Yes** — subtitle text from the current video is sent to the user's selected translation provider (Anthropic / OpenAI / OpenRouter) for translation. For Netflix, the current title + season + episode is sent to OpenSubtitles to look up a matching subtitle file. |
+| Website content | **Yes** — subtitle text from the current video is sent to the user's selected translation provider (Anthropic / OpenAI / OpenRouter) for translation. |
 
 Checkbox certifications:
 

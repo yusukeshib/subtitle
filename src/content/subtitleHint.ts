@@ -108,9 +108,8 @@ export function updateSubtitleHint() {
   }
 
   const platform = currentPlatform();
-  const applicable = platform?.subtitleSource.kind === "network-intercept";
   const shouldShow =
-    applicable &&
+    platform !== null &&
     state.enabled &&
     state.providerReady &&
     state.playback === "playing" &&
