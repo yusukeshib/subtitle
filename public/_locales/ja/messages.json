@@ -4,7 +4,7 @@
   "status_open_streaming_page": {
     "message": "Prime VideoのページでJimakuをご利用ください。"
   },
-  "status_auto_translate_off": { "message": "自動翻訳はオフです。" },
+  "status_jimaku_off": { "message": "Jimakuはオフです。" },
   "status_provider_setup_needed": {
     "message": "下で翻訳プロバイダーを設定してください。"
   },
@@ -23,7 +23,7 @@
   },
   "status_subtitle_detected": { "message": "字幕トラックを検出しました。" },
   "status_waiting_for_subtitle": { "message": "字幕トラックを待機中…" },
-  "label_auto_translate": { "message": "自動翻訳" },
+  "label_enable_jimaku": { "message": "Jimakuを有効にする" },
   "label_target_language": { "message": "翻訳先の言語" },
   "label_show_translated": { "message": "翻訳字幕を表示" },
   "label_hide_original": { "message": "元の字幕を非表示" },

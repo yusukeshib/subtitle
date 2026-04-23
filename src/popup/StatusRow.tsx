@@ -19,7 +19,7 @@ function deriveView(snapshot: StateSnapshot, language: string): View {
   if (!snapshot.enabled) {
     return {
       dotClass: "idle",
-      label: t("status_auto_translate_off"),
+      label: t("status_jimaku_off"),
       progressPct: null,
       errorMessage: null,
       title: snapshot.title,

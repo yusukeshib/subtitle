@@ -4,7 +4,7 @@
   "status_open_streaming_page": {
     "message": "Ouvrez une page Prime Video pour utiliser Jimaku."
   },
-  "status_auto_translate_off": { "message": "La traduction automatique est désactivée." },
+  "status_jimaku_off": { "message": "Jimaku est désactivé." },
   "status_provider_setup_needed": {
     "message": "Configurez un fournisseur de traduction ci-dessous pour commencer."
   },
@@ -23,7 +23,7 @@
   },
   "status_subtitle_detected": { "message": "Piste de sous-titres détectée." },
   "status_waiting_for_subtitle": { "message": "En attente d'une piste de sous-titres…" },
-  "label_auto_translate": { "message": "Traduction automatique" },
+  "label_enable_jimaku": { "message": "Activer Jimaku" },
   "label_target_language": { "message": "Langue cible" },
   "label_show_translated": { "message": "Afficher les sous-titres traduits" },
   "label_hide_original": { "message": "Masquer les sous-titres originaux" },

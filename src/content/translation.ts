@@ -166,7 +166,7 @@ export function onProviderReadyChanged() {
   }
 }
 
-/** User flipped the Auto-translate toggle. */
+/** User flipped the Enable Jimaku toggle. */
 export function onEnabledChanged(next: boolean) {
   const prev = state.enabled;
   state.setEnabled(next);

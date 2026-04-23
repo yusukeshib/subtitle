@@ -52,14 +52,15 @@ function paintOverlay() {
   // Invariant: state.video is non-null iff playback is playing/paused.
   // So checking state.video alone is sufficient.
   const v = state.video;
-  if (!state.showTranslated || !v) {
+  if (!state.enabled || !state.showTranslated || !v) {
     setOverlayText("");
   } else {
     const cue = state.cues.findAt(v.currentTime - state.timeOffset);
     setOverlayText(cue ? cue.text : "");
   }
-  applyHideOriginal(state.hideOriginal && v !== null);
-  updateOverlayPosition({ video: v, hideOriginal: state.hideOriginal });
+  const hideOriginal = state.enabled && state.hideOriginal;
+  applyHideOriginal(hideOriginal && v !== null);
+  updateOverlayPosition({ video: v, hideOriginal });
 }
 
 // --- Video binding sync: single owner of state.video ---

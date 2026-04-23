@@ -3,7 +3,7 @@ import { DEFAULT_TARGET_LANGUAGE, getProvider, getTargetLanguage } from "../lib/
 import { t } from "../lib/i18n";
 import type { ProviderId } from "../lib/providers";
 import type { ExtensionMessage, PopupGetState, StateSnapshot } from "../types";
-import { AutoTranslateToggle } from "./AutoTranslateToggle";
+import { EnableToggle } from "./EnableToggle";
 import { LanguageSelect } from "./LanguageSelect";
 import { ModelLabel } from "./ModelLabel";
 import { OverlayToggles } from "./OverlayToggles";
@@ -75,7 +75,7 @@ export function App() {
 
       <StatusRow snapshot={snapshot} reachable={reachable} language={language} />
 
-      <AutoTranslateToggle />
+      <EnableToggle />
 
       <LanguageSelect value={language} onChange={setLanguage} />
 

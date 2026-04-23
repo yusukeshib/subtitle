@@ -2,7 +2,7 @@
   "tagline": { "message": "Translates Prime Video subtitles with AI." },
   "status_checking": { "message": "Checking…" },
   "status_open_streaming_page": { "message": "Open a Prime Video page to use Jimaku." },
-  "status_auto_translate_off": { "message": "Auto-translate is off." },
+  "status_jimaku_off": { "message": "Jimaku is off." },
   "status_provider_setup_needed": {
     "message": "Set up a translation provider below to get started."
   },
@@ -21,7 +21,7 @@
   },
   "status_subtitle_detected": { "message": "Subtitle track detected." },
   "status_waiting_for_subtitle": { "message": "Waiting for a subtitle track…" },
-  "label_auto_translate": { "message": "Auto-translate" },
+  "label_enable_jimaku": { "message": "Enable Jimaku" },
   "label_target_language": { "message": "Target language" },
   "label_show_translated": { "message": "Show translated overlay" },
   "label_hide_original": { "message": "Hide original subtitles" },

@@ -4,7 +4,7 @@
   "status_open_streaming_page": {
     "message": "Prime Video 페이지를 열어 Jimaku를 사용하세요."
   },
-  "status_auto_translate_off": { "message": "자동 번역이 꺼져 있습니다." },
+  "status_jimaku_off": { "message": "Jimaku가 꺼져 있습니다." },
   "status_provider_setup_needed": {
     "message": "아래에서 번역 제공자를 설정하세요."
   },
@@ -23,7 +23,7 @@
   },
   "status_subtitle_detected": { "message": "자막 트랙이 감지되었습니다." },
   "status_waiting_for_subtitle": { "message": "자막 트랙을 기다리는 중…" },
-  "label_auto_translate": { "message": "자동 번역" },
+  "label_enable_jimaku": { "message": "Jimaku 사용" },
   "label_target_language": { "message": "번역 대상 언어" },
   "label_show_translated": { "message": "번역된 자막 표시" },
   "label_hide_original": { "message": "원본 자막 숨기기" },
