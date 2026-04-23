@@ -30,11 +30,12 @@ function ensureHintRoot(): ShadowRoot {
       top: 16px;
       right: 16px;
       max-width: min(360px, 80vw);
-      padding: 12px 14px;
-      background: rgba(17, 24, 39, 0.92);
-      color: #fff;
-      border-radius: 8px;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+      padding: 14px 16px;
+      background: #ffffff;
+      color: #111827;
+      border-radius: 10px;
+      border-left: 4px solid #2563eb;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.25);
       font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", -apple-system, system-ui, sans-serif;
       font-size: 13px;
       line-height: 1.4;
@@ -45,21 +46,20 @@ function ensureHintRoot(): ShadowRoot {
     }
     .hint.show { display: flex; }
     .hint .content { flex: 1; }
-    .hint .title { font-weight: 600; margin-bottom: 2px; }
-    .hint .body { opacity: 0.85; }
+    .hint .title { font-weight: 700; margin-bottom: 3px; color: #111827; }
+    .hint .body { color: #4b5563; }
     .hint .close {
       background: transparent;
       border: none;
-      color: #fff;
-      opacity: 0.6;
+      color: #6b7280;
       font-size: 16px;
       line-height: 1;
       cursor: pointer;
-      padding: 2px 4px;
-      margin: -2px -4px -2px 0;
+      padding: 2px 6px;
+      margin: -2px -6px -2px 0;
       border-radius: 4px;
     }
-    .hint .close:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+    .hint .close:hover { color: #111827; background: rgba(0, 0, 0, 0.06); }
   `;
   root.appendChild(style);
   const el = document.createElement("div");
