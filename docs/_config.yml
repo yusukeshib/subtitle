@@ -1,5 +1,5 @@
 title: Jimaku
-description: Chrome extension that translates Prime Video and Netflix subtitles with AI.
+description: Chrome extension that translates Prime Video subtitles with AI.
 # Internal dev docs that should not show up on the Pages site.
 exclude:
   - translation-eval.md
