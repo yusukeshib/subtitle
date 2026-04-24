@@ -7,6 +7,8 @@ const PV_HOSTS = [
   "*://*.media-amazon.com/*",
   "*://*.pv-cdn.net/*",
   "*://*.aiv-cdn.net/*",
+  // Prime Video's DASH CDN also serves subtitle segments from Akamai.
+  "*://*.akamaized.net/*",
 ] as const;
 
 const PV_CONTENT_MATCHES = [

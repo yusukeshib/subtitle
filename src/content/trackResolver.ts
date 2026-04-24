@@ -1,3 +1,4 @@
+import { DASH_TEXT_MP4_RE, mergeMp4TtmlFragments } from "../lib/mp4Subtitle";
 import { loadCues } from "../lib/subtitle";
 import type { Cue } from "../types";
 import { normalizeCueText } from "./cueList";
@@ -25,6 +26,12 @@ type Candidate = { url: string; cues: Cue[] | null };
 async function fetchSubtitleText(url: string): Promise<string> {
   const res = await fetch(url, { credentials: "omit" });
   if (!res.ok) throw new Error(`Failed to fetch subtitles: ${res.status}`);
+  // Prime Video now ships TTML as fragmented MP4 segments. Read the bytes and
+  // extract/merge the embedded TTML so the rest of the pipeline keeps seeing
+  // a plain TTML string.
+  if (DASH_TEXT_MP4_RE.test(url)) {
+    return mergeMp4TtmlFragments(await res.arrayBuffer());
+  }
   return await res.text();
 }
 

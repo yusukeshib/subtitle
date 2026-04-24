@@ -12,6 +12,9 @@ import type {
 const SUBTITLE_URL_RE = /\.(vtt|dfxp|ttml2?)(\?|$)/i;
 const SUBTITLE_PATH_HINT = /(caption|subtitle|timedtext|subtitleset|-subs?-|_subs?_|\/subs\/)/i;
 const HINTED_CONTAINER_RE = /\.(xml|json|m3u8)(\?|$)/i;
+// Prime Video's DASH-segmented TTML subtitles live in fragmented MP4s named
+// "{uuid}_text_{N}.mp4". No query-string extension hint — detect directly.
+const DASH_TEXT_MP4_RE = /_text_\d+\.mp4(\?|$)/i;
 
 const urlsByTab = new Map<number, Set<string>>();
 const lastTitleKeyByTab = new Map<number, string>();
@@ -30,6 +33,7 @@ function titleKeyFromUrl(url: string): string {
 
 function looksLikeSubtitle(url: string): boolean {
   if (SUBTITLE_URL_RE.test(url)) return true;
+  if (DASH_TEXT_MP4_RE.test(url)) return true;
   if (SUBTITLE_PATH_HINT.test(url) && HINTED_CONTAINER_RE.test(url)) return true;
   return false;
 }
