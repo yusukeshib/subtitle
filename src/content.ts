@@ -72,131 +72,139 @@ function syncVideoBinding() {
   if (want) state.onVideoAttached(want, attachCalibration(want));
 }
 
-// ---------- Track resolver ----------
-
-const trackResolver = createTrackResolver({
-  getCurrentUrl: () => state.subtitleUrl,
-  onResolved: (url) => void applySubtitleUrl(url),
-});
-
-// ---------- chrome.runtime messaging ----------
-
-chrome.runtime.onMessage.addListener((raw: ExtensionMessage) => {
-  switch (raw.type) {
-    case "SUBTITLE_DETECTED":
-      trackResolver.add(raw.url);
-      break;
-    case "TAB_RESET":
-      trackResolver.clear();
-      state.onTabReset();
-      resetSubtitleHint();
-      break;
-    case "POPUP_GET_STATE":
-      broadcastState();
-      break;
-  }
-});
-
-// ---------- Bootstrap ----------
-
 async function readProviderReady(): Promise<boolean> {
   const id = await getProvider();
   const key = await getProviderKey(id);
   return key !== null;
 }
 
-void (async () => {
-  const [showTranslated, hideOriginal, targetLanguage, enabled, providerReady] = await Promise.all([
-    getShowTranslated(),
-    getHideOriginal(),
-    getTargetLanguage(),
-    getEnabled(),
-    readProviderReady(),
-  ]);
-  state.setShowTranslated(showTranslated);
-  state.setHideOriginal(hideOriginal);
-  state.setTargetLanguage(targetLanguage);
-  state.setEnabled(enabled);
-  state.setProviderReady(providerReady);
+// Manifest matches every Amazon page so a single JS predicate
+// (`currentPlatform()` / `Platform.matches`) is the source of truth for
+// "should we run here". Bail before registering anything on unrelated pages.
+function bootstrap() {
+  // ---------- Track resolver ----------
 
-  // Subscribe after bootstrap so a single initial notify covers both.
-  state.subscribe(broadcastState);
-  state.subscribe(paintOverlay);
-  state.subscribe(updateSubtitleHint);
-  paintOverlay();
-  broadcastState();
-  updateSubtitleHint();
+  const trackResolver = createTrackResolver({
+    getCurrentUrl: () => state.subtitleUrl,
+    onResolved: (url) => void applySubtitleUrl(url),
+  });
 
-  const readyMsg: ContentReady = { type: "CONTENT_READY" };
-  chrome.runtime.sendMessage(readyMsg).catch(() => {});
-})();
+  // ---------- chrome.runtime messaging ----------
 
-// ---------- Storage settings ----------
+  chrome.runtime.onMessage.addListener((raw: ExtensionMessage) => {
+    switch (raw.type) {
+      case "SUBTITLE_DETECTED":
+        trackResolver.add(raw.url);
+        break;
+      case "TAB_RESET":
+        trackResolver.clear();
+        state.onTabReset();
+        resetSubtitleHint();
+        break;
+      case "POPUP_GET_STATE":
+        broadcastState();
+        break;
+    }
+  });
 
-const PROVIDER_KEY_STORAGE: Record<ProviderId, string> = {
-  anthropic: "anthropicKey",
-  openai: "openaiKey",
-  openrouter: "openrouterKey",
-};
+  // ---------- Bootstrap ----------
 
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== "local") return;
-  if (changes.showTranslated) state.setShowTranslated(changes.showTranslated.newValue !== false);
-  if (changes.hideOriginal) state.setHideOriginal(changes.hideOriginal.newValue === true);
-  if (changes.targetLanguage) {
-    const v = changes.targetLanguage.newValue;
-    state.setTargetLanguage(typeof v === "string" && v.trim() ? v : DEFAULT_TARGET_LANGUAGE);
-    void onTargetLanguageChanged();
+  void (async () => {
+    const [showTranslated, hideOriginal, targetLanguage, enabled, providerReady] =
+      await Promise.all([
+        getShowTranslated(),
+        getHideOriginal(),
+        getTargetLanguage(),
+        getEnabled(),
+        readProviderReady(),
+      ]);
+    state.setShowTranslated(showTranslated);
+    state.setHideOriginal(hideOriginal);
+    state.setTargetLanguage(targetLanguage);
+    state.setEnabled(enabled);
+    state.setProviderReady(providerReady);
+
+    // Subscribe after bootstrap so a single initial notify covers both.
+    state.subscribe(broadcastState);
+    state.subscribe(paintOverlay);
+    state.subscribe(updateSubtitleHint);
+    paintOverlay();
+    broadcastState();
+    updateSubtitleHint();
+
+    const readyMsg: ContentReady = { type: "CONTENT_READY" };
+    chrome.runtime.sendMessage(readyMsg).catch(() => {});
+  })();
+
+  // ---------- Storage settings ----------
+
+  const PROVIDER_KEY_STORAGE: Record<ProviderId, string> = {
+    anthropic: "anthropicKey",
+    openai: "openaiKey",
+    openrouter: "openrouterKey",
+  };
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes.showTranslated) state.setShowTranslated(changes.showTranslated.newValue !== false);
+    if (changes.hideOriginal) state.setHideOriginal(changes.hideOriginal.newValue === true);
+    if (changes.targetLanguage) {
+      const v = changes.targetLanguage.newValue;
+      state.setTargetLanguage(typeof v === "string" && v.trim() ? v : DEFAULT_TARGET_LANGUAGE);
+      void onTargetLanguageChanged();
+    }
+    if (changes.enabled) onEnabledChanged(changes.enabled.newValue !== false);
+
+    // Provider selection or any of the per-provider keys may affect readiness.
+    // Re-derive from storage rather than inferring from the diff — simpler and
+    // always correct.
+    const providerTouched =
+      changes.provider !== undefined ||
+      Object.values(PROVIDER_KEY_STORAGE).some((k) => changes[k] !== undefined);
+    if (providerTouched) {
+      void readProviderReady().then((ready) => {
+        const prev = state.providerReady;
+        state.setProviderReady(ready);
+        if (ready && !prev) onProviderReadyChanged();
+      });
+    }
+  });
+
+  // ---------- DOM lifecycle ----------
+
+  // Re-evaluate video binding whenever the DOM changes (video remount) or
+  // playback state transitions (player opened/closed). Both feed into the
+  // single sync function that owns state.video.
+  watchForVideo(syncVideoBinding);
+  watchForPlayback((next) => {
+    state.onPlaybackChanged(next);
+    syncVideoBinding();
+    onPlaybackTransition(next);
+  });
+
+  // Video clock drives re-paint (time-driven re-derive, not a state change).
+  // We listen inside a MutationObserver-style pattern: re-attach whenever the
+  // tracked video element changes. Simpler: check on every paint — if the video
+  // changed since last listen, rebind.
+  let boundVideo: HTMLVideoElement | null = null;
+  function rebindTimeupdate() {
+    if (state.video === boundVideo) return;
+    if (boundVideo) boundVideo.removeEventListener("timeupdate", paintOverlay);
+    boundVideo = state.video;
+    if (boundVideo) boundVideo.addEventListener("timeupdate", paintOverlay);
   }
-  if (changes.enabled) onEnabledChanged(changes.enabled.newValue !== false);
+  state.subscribe(rebindTimeupdate);
 
-  // Provider selection or any of the per-provider keys may affect readiness.
-  // Re-derive from storage rather than inferring from the diff — simpler and
-  // always correct.
-  const providerTouched =
-    changes.provider !== undefined ||
-    Object.values(PROVIDER_KEY_STORAGE).some((k) => changes[k] !== undefined);
-  if (providerTouched) {
-    void readProviderReady().then((ready) => {
-      const prev = state.providerReady;
-      state.setProviderReady(ready);
-      if (ready && !prev) onProviderReadyChanged();
-    });
-  }
-});
-
-// ---------- DOM lifecycle ----------
-
-// Re-evaluate video binding whenever the DOM changes (video remount) or
-// playback state transitions (player opened/closed). Both feed into the
-// single sync function that owns state.video.
-watchForVideo(syncVideoBinding);
-watchForPlayback((next) => {
-  state.onPlaybackChanged(next);
-  syncVideoBinding();
-  onPlaybackTransition(next);
-});
-
-// Video clock drives re-paint (time-driven re-derive, not a state change).
-// We listen inside a MutationObserver-style pattern: re-attach whenever the
-// tracked video element changes. Simpler: check on every paint — if the video
-// changed since last listen, rebind.
-let boundVideo: HTMLVideoElement | null = null;
-function rebindTimeupdate() {
-  if (state.video === boundVideo) return;
-  if (boundVideo) boundVideo.removeEventListener("timeupdate", paintOverlay);
-  boundVideo = state.video;
-  if (boundVideo) boundVideo.addEventListener("timeupdate", paintOverlay);
+  window.addEventListener("resize", () =>
+    updateOverlayPosition({ video: state.video, hideOriginal: state.hideOriginal }),
+  );
+  document.addEventListener("fullscreenchange", () =>
+    updateOverlayPosition({ video: state.video, hideOriginal: state.hideOriginal }),
+  );
+  // Tab closing — abort in-flight so streaming doesn't continue after unmount.
+  window.addEventListener("pagehide", () => {
+    state.abortCtrl?.abort();
+  });
 }
-state.subscribe(rebindTimeupdate);
 
-window.addEventListener("resize", () =>
-  updateOverlayPosition({ video: state.video, hideOriginal: state.hideOriginal }),
-);
-document.addEventListener("fullscreenchange", () =>
-  updateOverlayPosition({ video: state.video, hideOriginal: state.hideOriginal }),
-);
-// Tab closing — abort in-flight so streaming doesn't continue after unmount.
-window.addEventListener("pagehide", () => {
-  state.abortCtrl?.abort();
-});
+if (currentPlatform()) bootstrap();

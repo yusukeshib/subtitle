@@ -11,21 +11,26 @@ const PV_HOSTS = [
   "*://*.akamaized.net/*",
 ] as const;
 
+// Manifest match patterns can't express "/dp/ anywhere in the path"
+// (only positional `/*/dp/*` etc.), so we inject on the whole host and let
+// `matches()` below decide at runtime whether the page is actually ours.
 const PV_CONTENT_MATCHES = [
-  "*://*.amazon.com/gp/video/*",
-  "*://*.amazon.com/dp/*",
-  "*://*.amazon.co.jp/gp/video/*",
-  "*://*.amazon.co.jp/dp/*",
+  "*://*.amazon.com/*",
+  "*://*.amazon.co.jp/*",
   "*://*.primevideo.com/*",
 ] as const;
 
-const PV_HOST_RE = /(^|\.)(amazon\.com|amazon\.co\.jp|primevideo\.com)$/i;
+const PV_AMAZON_HOST_RE = /(^|\.)(amazon\.com|amazon\.co\.jp)$/i;
+const PV_PRIMEVIDEO_HOST_RE = /(^|\.)primevideo\.com$/i;
+const PV_AMAZON_PATH_RE = /^\/gp\/video\/|\/dp\/[A-Z0-9]/i;
 
 export const primeVideo: Platform = {
   id: "primevideo",
 
   matches(url: URL) {
-    return PV_HOST_RE.test(url.hostname);
+    if (PV_PRIMEVIDEO_HOST_RE.test(url.hostname)) return true;
+    if (!PV_AMAZON_HOST_RE.test(url.hostname)) return false;
+    return PV_AMAZON_PATH_RE.test(url.pathname);
   },
 
   hostPermissions: PV_HOSTS,
