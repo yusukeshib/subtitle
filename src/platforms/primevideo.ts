@@ -61,16 +61,9 @@ export const primeVideo: Platform = {
   ],
 
   findTitle() {
-    const sels = [
-      ".atvwebplayersdk-title-text",
-      '[class*="TitleContainer"] [class*="title"]',
-      "h1",
-    ];
-    for (const sel of sels) {
-      const el = document.querySelector(sel) as HTMLElement | null;
-      const t = el?.textContent?.trim();
-      if (t) return t;
-    }
+    const el = document.querySelector(".atvwebplayersdk-title-text") as HTMLElement | null;
+    const playerTitle = el?.textContent?.trim();
+    if (playerTitle) return playerTitle;
     const t = document.title
       ?.replace(/\s*\|\s*Prime Video\s*$/i, "")
       .replace(/^Watch\s+/i, "")
