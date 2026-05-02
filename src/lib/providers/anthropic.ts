@@ -1,9 +1,28 @@
-import { httpErrorFromResponse, type StreamParams } from "./types";
+import type { Usage } from "../../types";
+import { httpErrorFromResponse, type StreamParams, type StreamResult } from "./types";
 
 const API_URL = "https://api.anthropic.com/v1/messages";
 const API_VERSION = "2023-06-01";
 
-export async function streamAnthropic(p: StreamParams): Promise<string> {
+type AnthropicUsage = {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+};
+
+function mergeUsage(into: Usage, src: AnthropicUsage) {
+  if (typeof src.input_tokens === "number") into.inputTokens = src.input_tokens;
+  if (typeof src.output_tokens === "number") into.outputTokens = src.output_tokens;
+  if (typeof src.cache_read_input_tokens === "number") {
+    into.cacheReadTokens = src.cache_read_input_tokens;
+  }
+  if (typeof src.cache_creation_input_tokens === "number") {
+    into.cacheCreationTokens = src.cache_creation_input_tokens;
+  }
+}
+
+export async function streamAnthropic(p: StreamParams): Promise<StreamResult> {
   const body = {
     model: p.config.model,
     max_tokens: p.maxTokens,
@@ -30,6 +49,8 @@ export async function streamAnthropic(p: StreamParams): Promise<string> {
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
   let acc = "";
+  const usage: Usage = { inputTokens: 0, outputTokens: 0 };
+  let sawUsage = false;
 
   try {
     while (true) {
@@ -55,6 +76,22 @@ export async function streamAnthropic(p: StreamParams): Promise<string> {
               p.onTextDelta(text);
             }
           } catch {}
+        } else if (eventType === "message_start" && dataStr) {
+          try {
+            const d = JSON.parse(dataStr) as { message?: { usage?: AnthropicUsage } };
+            if (d.message?.usage) {
+              mergeUsage(usage, d.message.usage);
+              sawUsage = true;
+            }
+          } catch {}
+        } else if (eventType === "message_delta" && dataStr) {
+          try {
+            const d = JSON.parse(dataStr) as { usage?: AnthropicUsage };
+            if (d.usage) {
+              mergeUsage(usage, d.usage);
+              sawUsage = true;
+            }
+          } catch {}
         } else if (eventType === "error" && dataStr) {
           throw new Error(`Anthropic stream error: ${dataStr}`);
         }
@@ -65,5 +102,5 @@ export async function streamAnthropic(p: StreamParams): Promise<string> {
     reader.releaseLock();
   }
   if (!acc) throw new Error("empty response from Anthropic");
-  return acc;
+  return { text: acc, usage: sawUsage ? usage : null };
 }

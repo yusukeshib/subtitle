@@ -1,9 +1,16 @@
+import type { Usage } from "../../types";
+
 export type ProviderId = "anthropic" | "openai" | "openrouter";
 
 export type ProviderConfig = {
   id: ProviderId;
   apiKey: string;
   model: string;
+};
+
+export type StreamResult = {
+  text: string;
+  usage: Usage | null;
 };
 
 export type StreamParams = {

@@ -1,4 +1,4 @@
-import type { Cue, TranslatedCue } from "../types";
+import type { Cue, TranslatedCue, Usage } from "../types";
 import { CueSanitizer } from "./cueSanitize";
 import type { ProviderConfig } from "./providers";
 import { streamTranslation } from "./providers";
@@ -160,7 +160,7 @@ async function streamAndParseLines(
   systemPrompt: string,
   onLineDone: (parsed: ParsedLine | null) => void,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ text: string; usage: Usage | null }> {
   let acc = "";
   let scanFrom = 0;
   const onTextDelta = (text: string) => {
@@ -197,7 +197,7 @@ async function callWithRetry(
   systemPrompt: string,
   onLineDone: (parsed: ParsedLine | null) => void,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{ text: string; usage: Usage | null }> {
   let lastErr: unknown = null;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     if (signal?.aborted) throw new AbortError();
@@ -214,11 +214,19 @@ async function callWithRetry(
   throw lastErr;
 }
 
+export type TranslateResult = {
+  cues: TranslatedCue[];
+  // Usage attributed to THIS call only (not summed with prior cached usage).
+  // Caller is responsible for accumulating with any pre-existing usage on
+  // resume so the cache always reflects total cost-to-date.
+  usage: Usage | null;
+};
+
 export async function translateCues(
   cues: Cue[],
   config: ProviderConfig,
   opts: TranslateOptions,
-): Promise<TranslatedCue[]> {
+): Promise<TranslateResult> {
   const { signal, onProgress, onCue, resumeFrom, targetLanguage } = opts;
   const systemPrompt = buildSystemPrompt(targetLanguage);
   const indexed = cues.map((c, i) => ({ i, start: c.start, end: c.end, t: c.text }));
@@ -236,7 +244,7 @@ export async function translateCues(
     if (remaining.length === 0) {
       // Every source cue is already translated; nothing to do.
       onProgress?.(total, total);
-      return [...resumeFrom];
+      return { cues: [...resumeFrom], usage: null };
     }
     // Send only the tail of the prior translation as inline style context.
     // Full-prior would be ideal but blows past the 30K input-tokens/min rate
@@ -270,7 +278,7 @@ export async function translateCues(
   }
   const emittedNew: TranslatedCue[] = [];
 
-  await callWithRetry(
+  const { usage } = await callWithRetry(
     config,
     userContent,
     systemPrompt,
@@ -293,7 +301,7 @@ export async function translateCues(
   const combined = resumeFrom ? [...resumeFrom, ...filteredNew] : filteredNew;
   if (combined.length === 0) throw new Error("no valid cues in model response");
   onProgress?.(total, total);
-  return combined;
+  return { cues: combined, usage };
 }
 
 export { AbortError };

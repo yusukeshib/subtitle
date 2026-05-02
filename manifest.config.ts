@@ -42,4 +42,8 @@ export default defineManifest({
       128: "icons/icon-128.png",
     },
   },
+  options_ui: {
+    page: "src/cache/cache.html",
+    open_in_tab: true,
+  },
 });

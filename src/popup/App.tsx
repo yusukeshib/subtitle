@@ -84,6 +84,16 @@ export function App() {
       <ProviderSection provider={provider} onProviderChange={setProvider} />
 
       <ModelLabel provider={provider} language={language} />
+
+      <p className="cache-link">
+        <button
+          type="button"
+          className="cache-link-btn"
+          onClick={() => chrome.runtime.openOptionsPage()}
+        >
+          View cache
+        </button>
+      </p>
     </div>
   );
 }

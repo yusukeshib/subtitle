@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jimaku — Cache</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", sans-serif;
+        color: #1a1a1a;
+        background: #fafafa;
+      }
+      .page {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 24px 24px 64px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      .sub {
+        color: #666;
+        font-size: 12px;
+        margin: 0 0 20px;
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 0 0 20px;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e6e6e6;
+        border-radius: 8px;
+        padding: 12px 14px;
+      }
+      .card .label { font-size: 11px; color: #888; }
+      .card .value { font-size: 18px; font-weight: 600; margin-top: 4px; }
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .toolbar .count { font-size: 12px; color: #666; }
+      .toolbar button {
+        padding: 6px 10px;
+        font-size: 12px;
+        background: transparent;
+        color: #b91c1c;
+        border: 1px solid #f0cccc;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .toolbar button:hover:not([disabled]) { background: #fdf2f2; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #e6e6e6;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      th, td {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 12px;
+        border-top: 1px solid #f0f0f0;
+        vertical-align: middle;
+      }
+      th {
+        background: #fafafa;
+        font-weight: 600;
+        color: #555;
+        border-top: none;
+        border-bottom: 1px solid #e6e6e6;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      td.title { font-weight: 500; max-width: 320px; }
+      td.title a { color: inherit; text-decoration: none; }
+      td.title a:hover { text-decoration: underline; }
+      td.legacy { color: #999; font-style: italic; }
+      .bar {
+        height: 6px;
+        background: #eee;
+        border-radius: 3px;
+        overflow: hidden;
+        width: 100px;
+      }
+      .bar > div {
+        height: 100%;
+        background: #1f6feb;
+        transition: width 0.2s ease;
+      }
+      .bar.complete > div { background: #0a7a2f; }
+      .progress-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .progress-cell .pct { color: #666; min-width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+      td.cost { font-variant-numeric: tabular-nums; }
+      .pill {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: #eef2ff;
+        color: #3949ab;
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .pill.partial { background: #fef3c7; color: #92400e; }
+      .delete-btn {
+        background: transparent;
+        border: none;
+        color: #999;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .delete-btn:hover { background: #fdf2f2; color: #b91c1c; }
+      .empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: #888;
+        background: #fff;
+        border: 1px solid #e6e6e6;
+        border-radius: 8px;
+      }
+      td .meta {
+        color: #888;
+        font-size: 11px;
+        margin-top: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./cache.tsx"></script>
+  </body>
+</html>

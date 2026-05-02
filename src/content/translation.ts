@@ -1,9 +1,27 @@
 import { getCache, getProviderConfig, setCache } from "../lib/cache";
 import { loadCues } from "../lib/subtitle";
 import { AbortError, translateCues } from "../lib/translate";
-import type { Cue, PlaybackState } from "../types";
+import { currentPlatform } from "../platforms";
+import type { Cue, PlaybackState, Usage } from "../types";
 import { isMainVideoPlaying } from "./playback";
 import { state } from "./state";
+
+function mergeUsage(prior: Usage | null | undefined, fresh: Usage | null): Usage | null {
+  if (!prior) return fresh;
+  if (!fresh) return prior;
+  const merged: Usage = {
+    inputTokens: prior.inputTokens + fresh.inputTokens,
+    outputTokens: prior.outputTokens + fresh.outputTokens,
+  };
+  const cacheRead = (prior.cacheReadTokens ?? 0) + (fresh.cacheReadTokens ?? 0);
+  if (cacheRead > 0) merged.cacheReadTokens = cacheRead;
+  const cacheCreation = (prior.cacheCreationTokens ?? 0) + (fresh.cacheCreationTokens ?? 0);
+  if (cacheCreation > 0) merged.cacheCreationTokens = cacheCreation;
+  if (typeof prior.reportedCostUsd === "number" || typeof fresh.reportedCostUsd === "number") {
+    merged.reportedCostUsd = (prior.reportedCostUsd ?? 0) + (fresh.reportedCostUsd ?? 0);
+  }
+  return merged;
+}
 
 // --- Internal helpers ---
 
@@ -30,7 +48,7 @@ async function hydrateSourceCues(url: string, cached: { sourceCues?: Cue[] }) {
 
 // --- Translation run ---
 
-async function runTranslation(resumeFrom: Cue[] | null) {
+async function runTranslation(resumeFrom: Cue[] | null, priorUsage: Usage | null) {
   if (!state.enabled || !state.subtitleUrl) return;
   // No API key yet — stay in idle rather than flipping to error. The storage
   // listener re-kicks translation once a key lands.
@@ -66,10 +84,13 @@ async function runTranslation(resumeFrom: Cue[] | null) {
     const resumeCues = resumeFrom ? state.cues.snapshot() : null;
     state.onTranslationStarted(cues.length, resumeCues);
 
+    const title = currentPlatform()?.findTitle() ?? undefined;
+    const pageUrl = window.location.href;
+
     let lastCacheWrite = 0;
     const CACHE_WRITE_INTERVAL_MS = 2000;
 
-    const translated = await translateCues(cues, providerConfig, {
+    const { cues: translated, usage: freshUsage } = await translateCues(cues, providerConfig, {
       signal,
       targetLanguage: targetLang,
       resumeFrom: resumeCues ?? undefined,
@@ -89,6 +110,11 @@ async function runTranslation(resumeFrom: Cue[] | null) {
             cues: state.cues.snapshot(),
             sourceCues: cues,
             complete: false,
+            title,
+            pageUrl,
+            lang: targetLang,
+            provider: providerConfig.id,
+            usage: priorUsage ?? undefined,
           });
         }
       },
@@ -98,12 +124,18 @@ async function runTranslation(resumeFrom: Cue[] | null) {
 
     state.onTranslationComplete(translated);
 
+    const totalUsage = mergeUsage(priorUsage, freshUsage);
     await setCache(targetUrl, targetLang, {
       translatedAt: Date.now(),
       model: providerConfig.model,
       cues: translated,
       sourceCues: cues,
       complete: true,
+      title,
+      pageUrl,
+      lang: targetLang,
+      provider: providerConfig.id,
+      usage: totalUsage ?? undefined,
     });
   } catch (e) {
     if (e instanceof AbortError || (e as Error).name === "AbortError") {
@@ -131,12 +163,12 @@ export async function loadOrTranslate() {
     state.onCachedCuesHydrated(cached.cues, !isPartial);
     await hydrateSourceCues(state.subtitleUrl, cached);
     if (isPartial && state.enabled && isMainVideoPlaying()) {
-      void runTranslation(cached.cues.slice());
+      void runTranslation(cached.cues.slice(), cached.usage ?? null);
     }
     return;
   }
   // No cache. Phase stays "idle"; runTranslation will flip to "translating".
-  if (state.enabled && isMainVideoPlaying()) void runTranslation(null);
+  if (state.enabled && isMainVideoPlaying()) void runTranslation(null, null);
 }
 
 /** Switch to a new subtitle URL (typically fired by the track resolver). */

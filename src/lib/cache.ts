@@ -33,6 +33,33 @@ export async function deleteCache(url: string, lang: string): Promise<void> {
   await chrome.storage.local.remove(key);
 }
 
+export type CacheRecord = {
+  key: string;
+  entry: CacheEntry;
+};
+
+export async function listCacheEntries(): Promise<CacheRecord[]> {
+  const all = await chrome.storage.local.get(null);
+  const out: CacheRecord[] = [];
+  for (const [k, v] of Object.entries(all)) {
+    if (!k.startsWith(PREFIX)) continue;
+    if (!v || typeof v !== "object") continue;
+    out.push({ key: k, entry: v as CacheEntry });
+  }
+  return out;
+}
+
+export async function deleteCacheByKey(key: string): Promise<void> {
+  if (!key.startsWith(PREFIX)) return;
+  await chrome.storage.local.remove(key);
+}
+
+export async function clearAllCache(): Promise<void> {
+  const all = await chrome.storage.local.get(null);
+  const keys = Object.keys(all).filter((k) => k.startsWith(PREFIX));
+  if (keys.length > 0) await chrome.storage.local.remove(keys);
+}
+
 const KEY_STORAGE: Record<ProviderId, string> = {
   anthropic: "anthropicKey",
   openai: "openaiKey",
